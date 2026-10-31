@@ -139,19 +139,19 @@ export default async function AccessRequestsPage() {
           </a>
         </div>
 
-        <div className="rounded-xl border border-line bg-surface shadow-card overflow-x-auto">
-          <div className="min-w-[850px]">
-          <table className="w-full text-sm">
+        <div className="rounded-xl border border-line bg-surface shadow-card">
+          <div className="overflow-x-auto">
+          <table className="w-full text-[12px] table-auto">
             <thead>
               <tr className="border-b border-line text-ink-3">
-                <th className="text-left px-4 py-3 font-semibold">Name</th>
-                <th className="text-left px-4 py-3 font-semibold">Email</th>
-                <th className="text-left px-4 py-3 font-semibold">Requested Role</th>
-                <th className="text-left px-4 py-3 font-semibold">Department / Club</th>
-                <th className="text-left px-4 py-3 font-semibold">Status</th>
-                <th className="text-left px-4 py-3 font-semibold">Reviewed By</th>
-                <th className="text-left px-4 py-3 font-semibold">Requested</th>
-                <th className="px-4 py-3 font-semibold">Action</th>
+                <th className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Name</th>
+                <th className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Email</th>
+                <th className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Requested Role</th>
+                <th className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Department / Club</th>
+                <th className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Status</th>
+                <th className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Reviewed By</th>
+                <th className="text-left px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Requested</th>
+                <th className="px-3 py-2 font-semibold text-[11px] uppercase tracking-wider">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -167,18 +167,18 @@ export default async function AccessRequestsPage() {
                 const org = "—";
                 return (
                   <tr key={r.id} className="border-b border-line hover:bg-surface/50">
-                    <td className="px-4 py-3 text-ink">{r.name}</td>
-                    <td className="px-4 py-3 text-ink-2">{r.email}</td>
-                    <td className="px-4 py-3 text-ink-2">{r.requestedRole.charAt(0).toUpperCase() + r.requestedRole.slice(1)}</td>
-                    <td className="px-4 py-3 text-ink-2">{org}</td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${statusColor}`}>
+                    <td className="px-3 py-2 text-[12px] text-ink truncate max-w-[120px]">{r.name}</td>
+                    <td className="px-3 py-2 text-[12px] text-ink-2 truncate max-w-[180px]">{r.email}</td>
+                    <td className="px-3 py-2 text-[12px] text-ink-2">{r.requestedRole.charAt(0).toUpperCase() + r.requestedRole.slice(1)}</td>
+                    <td className="px-3 py-2 text-[12px] text-ink-2">{org}</td>
+                    <td className="px-3 py-2">
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusColor}`}>
                         {statusIcon} {r.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3">{r.reviewerName ?? "—"}</td>
-                    <td className="px-4 py-3 text-ink-2">{new Date(r.createdAt).toLocaleDateString()}</td>
-                    <td className="px-4 py-3">
+                    <td className="px-3 py-2 text-[12px] text-ink-2 truncate max-w-[100px]">{r.reviewerName ?? "—"}</td>
+                    <td className="px-3 py-2 text-[12px] text-ink-2">{new Date(r.createdAt).toLocaleDateString()}</td>
+                    <td className="px-3 py-2">
                       {r.status === "pending" ? (
                         <>
                           <form action={approveAccessRequestForm} className="inline">
@@ -186,24 +186,24 @@ export default async function AccessRequestsPage() {
                             <input type="hidden" name="note" value="Approved via Approval Centre" />
                             <button
                               type="submit"
-                              className="rounded-xl bg-green-600 px-2 py-1 text-xs font-semibold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
+                              className="rounded-xl bg-green-600 px-2 py-1 text-[10px] font-semibold text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2"
                             >
                               Approve
                             </button>
                           </form>
-                          <form action={rejectAccessRequestForm} className="inline ml-2">
+                          <form action={rejectAccessRequestForm} className="inline ml-1">
                             <input type="hidden" name="id" value={String(r.id)} />
                             <input type="hidden" name="reason" value="Not approved by administrator" />
                             <button
                               type="submit"
-                              className="rounded-xl border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+                              className="rounded-xl border border-rose-200 px-2 py-1 text-[10px] font-semibold text-rose-600 hover:bg-rose-50 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
                             >
                               Reject
                             </button>
                           </form>
                         </>
                       ) : (
-                        <span className="text-ink-3">{r.reviewNote ?? ""}</span>
+                        <span className="text-ink-3 text-[10px]">{r.reviewNote ?? ""}</span>
                       )}
                     </td>
                   </tr>
@@ -211,7 +211,7 @@ export default async function AccessRequestsPage() {
               })}
               {requests.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-8 text-center text-ink-3">
+                  <td colSpan={8} className="px-3 py-4 text-center text-ink-3">
                     No access requests.
                   </td>
                 </tr>
