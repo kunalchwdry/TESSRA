@@ -2,6 +2,7 @@ import { ArrowRight, CalendarDays, CheckCircle2, ClipboardList, Download, FileJs
 import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
+import { Fragment } from "react";
 import { AutoSubmitSelect, ActionForm, FieldError, SubmitButton } from "@/components/client";
 import { KIND_STYLE } from "@/components/timetable";
 import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Input, PageHeader, ProgressBar, StatCard, StatusBadge, TabLinks, Table, TableWrap, TD, TH, THead, TR } from "@/components/ui";
@@ -52,7 +53,7 @@ function OfficialGrid({ data, placements, movedIds, addedIds }: { data: Official
           </div>
         ))}
         {data.calendar.periods.filter((p) => p.teaching).map((p) => (
-          <div key={p.id}>
+          <Fragment key={p.id}>
             <div role="rowheader" className="sticky left-0 z-10 flex h-full flex-col justify-center border-b border-r border-line bg-surface px-3" style={{ gridColumn: 1, gridRow: rowFor(p.id) }}>
               <span className="text-[13px] font-semibold text-ink">P{p.id}</span>
               <span className="tabular text-[11px] text-ink-3">{p.start}</span>
@@ -60,7 +61,7 @@ function OfficialGrid({ data, placements, movedIds, addedIds }: { data: Official
             {DAY_ORDER.map((_, d) => (
               <div key={d} className={cn("border-b border-line", d < 4 && "border-r")} style={{ gridColumn: d + 2, gridRow: rowFor(p.id) }} />
             ))}
-          </div>
+          </Fragment>
         ))}
         <div className="sticky left-0 z-10 flex items-center border-b border-r border-line bg-subtle px-3 text-[11px] font-medium text-ink-3" style={{ gridColumn: 1, gridRow: 7 }}>Lunch</div>
         <div className="flex items-center justify-center border-b border-line bg-subtle text-[11px] font-medium text-ink-3" style={{ gridColumn: "2 / span 5", gridRow: 7 }}>
