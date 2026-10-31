@@ -305,10 +305,11 @@ export function LoginPanel({ accounts }: { accounts: Account[] }) {
       <LoginForm action={signIn} onSignedIn={enterWorkspace} />
       <DemoAccounts accounts={accounts} action={signIn} onSignedIn={enterWorkspace} />
       <p className="mt-6 text-center text-xs text-ink-3">
-        Don\u2019t have an account?{" "}
+        Don't have an account?{" "}
         <a href="/access-request" className="font-medium text-brand-700 hover:underline">
           Request access
-        </a>
+        </a>{" "}
+        (coordinator, faculty, club). Admins create accounts in the Admin Panel.
       </p>
       {context === "embedded" && probe === "ok" && !blocked && (
         <p className="mt-6 text-center text-xs text-ink-3">

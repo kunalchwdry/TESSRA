@@ -101,9 +101,9 @@ export default async function AccessRequestsPage() {
             <h1 className="text-2xl font-semibold text-ink">Access Requests</h1>
             <p className="text-sm text-ink-2">Review and approve or reject new account requests.</p>
           </div>
-          <a href="/access-request" className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-ink-2 hover:bg-subtle hover:text-ink transition-colors">
-            <Mail className="size-4" aria-hidden />
-            Request Access
+          <a href="/admin/create-account" className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-ink-2 hover:bg-subtle hover:text-ink transition-colors">
+            <UserPlus className="size-4" aria-hidden />
+            Create Account
           </a>
         </div>
 

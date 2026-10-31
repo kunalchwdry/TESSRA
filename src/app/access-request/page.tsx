@@ -37,7 +37,8 @@ export default async function AccessRequestPage() {
           <div>
             <h2 className="text-2xl font-semibold tracking-[-0.01em] text-ink">Request Access</h2>
             <p className="mt-1 text-sm text-ink-2">
-              Join {PRODUCT.name} — your request will be reviewed by an administrator.
+              Join {PRODUCT.name} — coordinators, faculty, and club reps need admin approval.
+              Administrators can create accounts directly in the Admin Panel.
             </p>
           </div>
         </div>
@@ -59,7 +60,6 @@ export default async function AccessRequestPage() {
             <div>
               <label className="block text-[13px] font-medium text-ink">Requested role</label>
               <Select name="requestedRole" required>
-                <option value="admin">Administrator (Dean's office)</option>
                 <option value="coordinator">Department Coordinator</option>
                 <option value="faculty">Faculty</option>
                 <option value="club">Club Representative</option>
