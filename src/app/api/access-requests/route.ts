@@ -35,7 +35,7 @@ export async function POST(req: Request) {
   if (Object.keys(errors).length) return json({ ok: false, message: "Please fix the highlighted fields.", errors }, 400);
   // Check for duplicate email in users or access_requests
   const [existingUser] = await db.select().from(t.users).where(eq(t.users.email, email)).limit(1);
-  if (existingUser) return json({ ok: false, message: "An account with this email already exists." }, 409);
+  if (existingUser) return json({ ok: false, message: "An account with this email already exists. Please sign in instead.", redirectTo: "/login" }, 409);
   const [existingRequest] = await db.select().from(t.accessRequests).where(eq(t.accessRequests.email, email)).limit(1);
   if (existingRequest) {
     return json({ ok: false, message: "You already have a pending access request. Wait for admin review." }, 409);
