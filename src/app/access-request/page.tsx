@@ -25,8 +25,17 @@ const CLUBS = [
 ];
 
 export default async function AccessRequestPage() {
-  const user = await getCurrentUser();
-  if (user) redirect("/");
+  let isAuthenticated = false;
+  try {
+    const user = await getCurrentUser();
+    if (user) {
+      redirect("/");
+    }
+    isAuthenticated = true;
+  } catch {
+    // If session check fails, allow access to the page anyway
+    isAuthenticated = true;
+  }
 
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas px-5 py-12 sm:px-8">
