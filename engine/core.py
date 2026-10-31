@@ -737,8 +737,8 @@ def allocate_exams(data: dict) -> list[dict]:
 # --------------------------------------------------------------------------- pipeline
 def build_schedule(data: dict, team: str = "TESSRA", time_limit: float = 60.0,
                    baseline: dict | None = None, include_fest: bool | None = None,
-                   include_exams: bool | None = None) -> dict:
-    result = solve_timetable(data, baseline=baseline, time_limit=time_limit)
+                   include_exams: bool | None = None, workers: int = 2) -> dict:
+    result = solve_timetable(data, baseline=baseline, time_limit=time_limit, workers=workers)
     if result.status not in ("optimal", "feasible"):
         return {"team": team, "dataset_id": data.get("dataset_id"),
                 "solver": {"status": result.status, "reasons": result.reasons,

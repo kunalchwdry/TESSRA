@@ -14,8 +14,8 @@ No official file has been modified. Nothing below claims validator compatibility
 
 | ID | Requirement (source) | Implementation | Test / evidence | Status |
 |---|---|---|---|---|
-| PS-1 | Weekly timetable for every session, no clashes (PS §2.1) | `engine/core.py::solve_timetable` (CP-SAT), 189/189 placed | `test_official_dataset_passes_official_validator`; VAL: 0 hard | ✅ |
-| PS-2 | Midsem exams for the following week (PS §2.2) | `engine/core.py::allocate_exams` — AM/PM, half capacity, multi-room | VAL exam section: 0 violations, soft 0 | ✅ |
+| PS-1 | Weekly timetable for every session, no clashes (PS §2.1) | `engine/core.py::solve_timetable` (CP-SAT), deployed through private `/solve-validated`; 189/189 placed | Pytest end-to-end + production Admin reset/generate/download + independent revalidation: 0 hard | ✅ |
+| PS-2 | Midsem exams for the following week (PS §2.2) | `engine/core.py::allocate_exams` — AM/PM, half capacity, multi-room | Committed and production-generated schedules: 41/41 exams, hard 0, exam soft 0 | ✅ |
 | PS-3 | Plain-English/Hinglish requests → structured booking → user edits → submit (PS §2.3) | `src/lib/booking-parser.ts` + `/api/club/parse-booking` fill the real editable booking form, expose assumptions/follow-ups, detect recurrence/priority abuse, select compatible venues, then reuse `createBookingAction` validation | `npm run test:parser` (7 cases, including UTC/IST boundary) + production build | ✅ |
 | PS-4 | Approve/reject/alternative per Spectra request with reason, official priority (PS §2.4, §4) | `engine/core.py::allocate_bookings` — role caps, priority order, tie by `submitted_at`, cancellations, reasons on every non-approval | VAL: score 65.5/70 (62–65.5 across optimal timetables), 0 priority inversions, reasons present | ✅ |
 | PS-5 | Disruptions: minimal moves, show diff, Admin approval, explain infeasibility (PS §2.5) | Engine repair keeps legal baseline placements (`move_penalty`), `/admin/official` shows moved badges + stability; infeasibility reasons from `infeasibility_reasons`. Admin approval gate exists in demo workspace; official repair applies on explicit Admin button press | VAL `--disruption --baseline`: 0 hard, soft 3, 8 moved (2 time, 6 room-only) | ✅ |
@@ -87,4 +87,4 @@ Latest official run: **S1 0 · S2 0 · S3 0 · S4 3 · S5 0 · S6 0 → total 3*
 2. **Arbitrary dataset/disruption upload** (PS-9) — the committed UI loads the official pack and sample disruption; upload of a replacement JSON file is not yet exposed.
 3. **Manual edits on the CIT grid** (PS-10) — the CIT grid is read-only; manual edits in the demo workspace are checked server-side.
 4. **“Why this slot” explanations** (PS-8) — booking rejection/alternative reasons and assistant conflict explanations exist, but there is no full per-variable CP-SAT proof explanation for every class placement.
-5. **Serverless CP-SAT execution** — production generation requires `ENGINE_URL` for the included FastAPI engine; local environments can use the Python subprocess fallback.
+5. **Bounded solve time** — production CP-SAT runs in the private Python service and are always hard-valid when returned, but a run that reaches its time limit may be feasible rather than soft-optimal.

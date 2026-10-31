@@ -5,9 +5,9 @@ All commands below were executed in the sandbox; headline results are recorded. 
 ## 1. Scheduling engine (pytest)
 ```
 python3 -m pytest engine/tests -q
-→ 29 passed
+→ 31 passed
 ```
-Covers: H1 missing/unknown sessions; H2/H3/H4 clashes; H5 capacity; H6 room type; H7 faculty unavailability; H8 room unavailability; H9 lab starts + lunch; H10 accessibility; H11 baskets; H12 daily limits; H13 booking clashes/mandatory groups; H14 fixed slots; individual S1–S6 objective weights; infeasibility explanations; booking role caps, tiebreaks, cancellations and rejection reasons; exam half-capacity/multi-room/group clashes; disruption semantics; and the **official end-to-end test** (solve → official validator → 0 hard; repair → 0 hard and minimal moves).
+Covers: H1 missing/unknown sessions; H2/H3/H4 clashes; H5 capacity; H6 room type; H7 faculty unavailability; H8 room unavailability; H9 lab starts + lunch; H10 accessibility; H11 baskets; H12 daily limits; H13 booking clashes/mandatory groups; H14 fixed slots; individual S1–S6 objective weights; infeasibility explanations; booking role caps, tiebreaks, cancellations and rejection reasons; exam half-capacity/multi-room/group clashes; disruption semantics; the validated FastAPI response boundary; byte equality of the deployed and organiser validator files; and the **official end-to-end test** (solve → official validator → 0 hard; repair → 0 hard and minimal moves).
 
 ## 2. Official validator (the organisers' file, unmodified)
 ```
@@ -42,11 +42,14 @@ npm audit --omit=dev        → 0 production vulnerabilities
 
 Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions, missing-value follow-ups and the UTC-to-Asia/Kolkata date boundary used on serverless hosts.
 
-## 4. Runtime & security checks (executed against the live preview)
-- Every route of all four roles → HTTP 200 with real data; anon → /login; wrong role → own workspace; exports 403 for unauthorized roles.
+## 4. Runtime & security checks (executed against production)
+- Every route of all four roles → HTTP 200 with real data; anon → `/login`; wrong role → own workspace; exports 403 for unauthorized roles.
+- All four README accounts signed in successfully after an Admin reset.
+- Admin reset regenerated 60/60 demo sessions and preserved the active session/accounts.
+- Production `/admin/official` generated 189/189 sessions and 41/41 exams through the private Python service, stored the run and displayed **0 hard violations**.
+- The generated schedule and report were downloaded from production. Running the organiser's original validator locally returned 0 hard violations, and its JSON report was data-identical to the report stored by the live app.
 - Sign-in browser matrix (headless Chromium, Firefox, WebKit): normal tab ✅, embedded preview ✅ (partitioned cookies), strict-privacy/blocked contexts → direct-link panel with copyable address ✅, sandboxed panel → explained ✅. Sign-out and session invalidation verified.
 - Login route: cross-site POST → 403; wrong password → 401 with field error.
-- Official page: run history, validator report rendering, export downloads.
 
 ## 5. Not yet covered (honest)
 - No frontend unit-test runner (components verified via typecheck + headless-browser flows instead).
@@ -70,8 +73,10 @@ Bugs found in `engine/core.py` by code audit, fixed in place (no architecture ch
 
 Also verified by design + tests: fixed-slot classes are never displaced (H14), basket sessions are never moved alone (H11), clubs capped to club_event can never displace classes (`test_club_cannot_displace_classes`), P10–P13 remain event-only (solver bound P1–P9), exam capacity halved.
 
-Post-fix official validator (both exports, plus independent re-run on the files downloaded through the live UI):
+Post-fix official validator on both committed scoring exports:
 **0 hard violations · soft 3 (provably optimal) · bookings 65.5/70 · 0 priority inversions · repair 8 forced moves.**
+
+The separate production smoke generation was deliberately accepted once it returned a complete hard-valid result; because its 90-second service limit ended at `feasible`, that particular live run had soft 12. Optimisation quality is handled independently from the 25-point hard-correctness gate and will be tuned next.
 
 ## 7. Manual scheduling & extra-class approval (runtime tests)
 

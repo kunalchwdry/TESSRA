@@ -38,7 +38,7 @@ Verified against the organiser-provided `official/starterpack/CrunchWeek_Starter
 
 ```text
 python -m pytest engine/tests -q
-29 passed
+31 passed
 
 schedule.json
   189/189 sessions · 41/41 exams

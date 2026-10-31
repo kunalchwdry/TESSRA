@@ -24,8 +24,8 @@ TESSRA uses the following third-party software. Versions are pinned by `package-
 | Package | Use | License |
 |---|---|---|
 | [Google OR-Tools CP-SAT](https://developers.google.com/optimization) | Constraint model for timetable generation and minimal-move repair | Apache-2.0 |
-| [FastAPI](https://fastapi.tiangolo.com/) | Optional HTTP wrapper around the Python scheduling engine | MIT |
-| [Uvicorn](https://www.uvicorn.org/) | ASGI server for the optional engine service | BSD-3-Clause |
+| [FastAPI](https://fastapi.tiangolo.com/) | HTTP boundary for the deployed Python scheduling/validation service | MIT |
+| [Uvicorn](https://www.uvicorn.org/) | Local/container ASGI server for the engine service | BSD-3-Clause |
 | [Pydantic](https://docs.pydantic.dev/) | FastAPI request/response validation | MIT |
 | [pytest](https://pytest.org/) | Python engine and official-validator regression tests | MIT |
 
@@ -51,4 +51,4 @@ The unmodified Crunch Week starter pack under `official/starterpack/CrunchWeek_S
 - the official standard-library-only `validator.py`;
 - the organiser README and example export.
 
-No organiser dependency or validator code is embedded into the solver. Generated exports are checked by running the supplied validator as a separate process.
+The original organiser files remain untouched. Because the deployed engine is an isolated service, `engine/official_validator.py` is an exact byte-for-byte deployment copy of the supplied `validator.py`; a regression test enforces equality. It runs only after CP-SAT generation and never participates in finding or changing a schedule.

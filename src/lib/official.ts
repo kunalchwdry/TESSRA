@@ -164,6 +164,7 @@ export async function runOfficialPipeline(opts: {
         baseline: opts.baseline ?? null,
         team: "TESSRA",
         time_limit: timeLimit,
+        workers: 2,
       }),
       signal: AbortSignal.timeout((timeLimit + 90) * 1000),
       cache: "no-store",

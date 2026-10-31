@@ -10,18 +10,18 @@
                │ Drizzle ORM                                  │ official pipeline
         PostgreSQL (Supabase-ready)                    src/lib/official.ts
         demo workspace tables + official_runs                 │
-                                                ┌─────────────┴──────────────┐
-                                                │ ENGINE_URL set?            │
-                                                │  yes → FastAPI /solve      │
-                                                │  no  → python3 solve.py    │
-                                                └─────────────┬──────────────┘
+                                                ┌─────────────┴────────────────────┐
+                                                │ Production: private Vercel binding │
+                                                │ ENGINE_URL → /solve-validated      │
+                                                │ Local fallback: python3 solve.py   │
+                                                └─────────────┬────────────────────┘
                                                               │
                                           engine/core.py — OR-Tools CP-SAT
                                           hard H1–H14 · soft S1–S6 (official weights)
                                           bookings (priority/caps/windows/overrides)
                                           exams (AM/PM, half capacity) · repairs
                                                               │
-                                          official validator.py (unmodified)
+                                          byte-identical official validator copy
                                           report stored verbatim in official_runs
 ```
 
@@ -29,8 +29,8 @@
 - **UI**: `src/components` design system (tokens in `globals.css`), role shell, timetable grids.
 - **Application**: `src/app/**` pages + `src/lib/*-actions.ts` server actions; every action starts with `requireRole(...)`.
 - **Domain**: demo engine (`src/lib/engine.ts`, `scheduler.ts`) and official integration (`src/lib/official.ts`, `official-actions.ts`).
-- **Scheduling service**: `engine/` is standalone Python — CP-SAT model, deterministic booking/exam allocators, independent `check_assignment`, CLI + FastAPI. It never touches the app database; it receives the dataset and returns a schedule, so it can be deployed and scaled separately (long solves must not run in serverless functions).
-- **Validation authority**: the organisers' `validator.py`. The app stores and displays its report verbatim; a run with violations is shown as invalid, never hidden.
+- **Scheduling service**: `engine/` is standalone Python — CP-SAT model, deterministic booking/exam allocators, independent `check_assignment`, CLI + FastAPI. In production it is a private Vercel Python Service bound to the web service; it never touches the app database and receives only the submitted dataset/baseline/change data.
+- **Validation authority**: the organisers' `validator.py`. The isolated deployment contains a byte-identical copy, enforced by regression test; `/solve-validated` returns its report with the schedule. The app stores and displays that report verbatim, and a run with violations is shown as invalid rather than hidden.
 
 ## Security model (current)
 - Session cookies: random 256-bit tokens in `auth_sessions`, HttpOnly; over HTTPS `SameSite=None; Secure; Partitioned` so embedded previews work; cookie-probe endpoint detects blocked storage before sign-in.

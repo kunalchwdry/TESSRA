@@ -176,6 +176,8 @@ TESSRA supports two auth modes:
 
 Both files were produced by `engine/solve.py`, not edited by hand, and then checked with the unmodified organiser `validator.py`. Reports: `exports/report.json` and `exports/report_after.json`.
 
+The production judge path has also been exercised after an Admin reset: **Generate schedule** placed 189/189 sessions and 41/41 exams, returned 0 hard violations, stored the run and served a downloadable export. Re-running the organiser validator locally on that live download produced the same report byte-for-byte at the JSON-data level.
+
 ---
 
 ## 📁 Repository Structure
@@ -214,7 +216,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 
 - The four role workspaces use a compact seeded campus dataset for fast judging; the full official CIT dataset, bookings, exams, validator report and disruption repair are presented under `/admin/official`.
 - The committed official workflow loads the organiser-provided CIT dataset and sample disruption. Uploading an arbitrary replacement dataset/change file is not yet exposed in the UI.
-- Running CP-SAT from a serverless deployment requires `ENGINE_URL` to point to the included FastAPI service. Local development can run `engine/solve.py` directly.
+- Production deploys the included FastAPI/OR-Tools engine as a private Vercel Python Service and injects `ENGINE_URL` through a service binding. Local development can use that URL or the Python subprocess fallback.
 - External LLM intent parsing is optional and requires a team-supplied key. The deterministic assistant, English/Hinglish booking parser and manual booking form work without it.
 
 ---

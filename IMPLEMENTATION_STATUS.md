@@ -11,7 +11,7 @@ Last verified: production build and all automated checks pass; both official exp
 - Priority-ordered Spectra booking allocation with role caps, submission-time tiebreak, cancellations, mandatory groups, alternatives and reasons.
 - AM/PM exam allocation with half capacity, multiple rooms and group-clash prevention.
 - Disruption repair that retains every legal baseline placement and penalizes discretionary moves.
-- FastAPI service (`engine/app.py`) plus local CLI (`engine/solve.py`).
+- FastAPI service (`engine/app.py`) plus local CLI (`engine/solve.py`). Production deploys it as a private Vercel Python Service; the live Admin generation path has produced 189/189 sessions, 41/41 exams and an official-validator report with 0 hard violations.
 
 Current official evidence:
 
@@ -59,7 +59,7 @@ See `docs/CONSTRAINT_VERIFICATION.md` and `exports/report*.json`.
 ## Automated checks
 
 ```text
-python -m pytest engine/tests -q   29 passed
+python -m pytest engine/tests -q   31 passed
 npm run test:parser                7 passed
 npm run typecheck                  0 errors
 npm run lint                       0 problems
@@ -73,7 +73,7 @@ npm audit --omit=dev               0 production vulnerabilities
 2. The UI loads the committed official dataset and sample disruption rather than accepting arbitrary replacement JSON uploads.
 3. The full CIT timetable grid is read-only; manual edits are supported and validated in the demo scheduling workspace.
 4. Booking and conflict explanations exist, but there is no full CP-SAT proof explanation for every individual class placement.
-5. Serverless CP-SAT generation needs the included FastAPI service configured through `ENGINE_URL`; local development uses the Python subprocess.
+5. CP-SAT solve quality can vary when a production run reaches its time limit; the committed optimal export remains the reproducible scoring artifact.
 
 ## Repository map
 

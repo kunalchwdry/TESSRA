@@ -42,6 +42,7 @@ class SolveRequest(BaseModel):
     baseline: dict | None = None
     team: str = "TESSRA"
     time_limit: float = Field(default=60.0, gt=0, le=600)
+    workers: int = Field(default=2, ge=1, le=8)
 
 
 class CheckRequest(BaseModel):
@@ -67,7 +68,7 @@ def health():
 def solve(req: SolveRequest, authorization: str | None = Header(default=None)):
     auth(authorization)
     data = apply_disruption(req.data, req.disruption) if req.disruption else req.data
-    return build_schedule(data, team=req.team, time_limit=req.time_limit, baseline=req.baseline)
+    return build_schedule(data, team=req.team, time_limit=req.time_limit, baseline=req.baseline, workers=req.workers)
 
 
 @app.post("/solve-validated")
@@ -80,7 +81,7 @@ def solve_validated(req: SolveRequest, authorization: str | None = Header(defaul
     """
     auth(authorization)
     data = apply_disruption(req.data, req.disruption) if req.disruption else req.data
-    schedule = build_schedule(data, team=req.team, time_limit=req.time_limit, baseline=req.baseline)
+    schedule = build_schedule(data, team=req.team, time_limit=req.time_limit, baseline=req.baseline, workers=req.workers)
     validator_data = validator_apply_disruption(req.data, req.disruption) if req.disruption else req.data
     report = run_official_validator(validator_data, schedule, req.baseline)
     return {"schedule": schedule, "report": report}
