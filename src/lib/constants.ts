@@ -19,6 +19,9 @@ export const PRODUCT = {
     "A unified platform that brings academic scheduling, campus resources, venue bookings, and operational decisions into one intelligent workspace.",
 };
 
+/** Institute calendar dates are interpreted in Indian Standard Time, including on UTC serverless hosts. */
+export const INSTITUTE_TIME_ZONE = "Asia/Kolkata";
+
 export const ROLES: Role[] = ["admin", "coordinator", "faculty", "club"];
 
 export const ROLE_LABEL: Record<Role, string> = {

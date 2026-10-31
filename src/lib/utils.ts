@@ -1,4 +1,4 @@
-import { DAY_COUNT, PERIOD_COUNT, PERIOD_MINUTES, PERIODS } from "./constants";
+import { DAY_COUNT, INSTITUTE_TIME_ZONE, PERIOD_COUNT, PERIOD_MINUTES, PERIODS } from "./constants";
 
 /** Standard result returned by every server action consumed through <ActionForm>. */
 export type ActionState = {
@@ -93,8 +93,15 @@ export function isoFromDate(d: Date) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export function todayIso() {
-  return isoFromDate(new Date());
+export function todayIso(now = new Date()) {
+  const parts = new Intl.DateTimeFormat("en", {
+    timeZone: INSTITUTE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const part = (type: "year" | "month" | "day") => parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("year")}-${part("month")}-${part("day")}`;
 }
 
 export function parseIso(iso: string) {
@@ -119,8 +126,7 @@ export function dayIndexFromIso(iso: string) {
 }
 
 export function currentDayIndex() {
-  const g = new Date().getDay();
-  return g >= 1 && g <= 5 ? g - 1 : -1;
+  return dayIndexFromIso(todayIso());
 }
 
 export function formatDate(iso: string) {

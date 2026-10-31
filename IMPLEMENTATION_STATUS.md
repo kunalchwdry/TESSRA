@@ -60,7 +60,7 @@ See `docs/CONSTRAINT_VERIFICATION.md` and `exports/report*.json`.
 
 ```text
 python -m pytest engine/tests -q   29 passed
-npm run test:parser                6 passed
+npm run test:parser                7 passed
 npm run typecheck                  0 errors
 npm run lint                       0 problems
 npm run build                      success

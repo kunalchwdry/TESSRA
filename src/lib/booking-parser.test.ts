@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePlainLanguageBooking } from "./booking-parser";
+import { todayIso } from "./utils";
 
 const base = {
   today: "2026-11-02",
@@ -10,6 +11,10 @@ const base = {
 };
 
 const parse = (text: string) => parsePlainLanguageBooking({ ...base, text });
+
+test("institute date uses Asia/Kolkata even when the server clock is UTC", () => {
+  assert.equal(todayIso(new Date("2026-10-31T20:00:00Z")), "2026-11-01");
+});
 
 test("English request extracts weekday, PM range, attendance and equipment", () => {
   const draft = parse("Need a room for 45 people on Tuesday 6 to 8 pm, projector please.");

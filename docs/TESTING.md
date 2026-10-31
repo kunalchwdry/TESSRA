@@ -33,14 +33,14 @@ Rejections are legitimate: BR-04 is on the official cancellations list; BR-09 ne
 
 ## 3. Web application
 ```
-npm run test:parser         → 6/6 English/Hinglish parser tests passed
+npm run test:parser         → 7/7 parser/date-boundary tests passed
 npm run typecheck           → 0 errors
 npm run lint                → 0 problems
 npm run build               → all routes compiled (Next.js 16.4.3 App Router)
 npm audit --omit=dev        → 0 production vulnerabilities
 ```
 
-Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions and follow-up questions for missing essentials.
+Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions, missing-value follow-ups and the UTC-to-Asia/Kolkata date boundary used on serverless hosts.
 
 ## 4. Runtime & security checks (executed against the live preview)
 - Every route of all four roles → HTTP 200 with real data; anon → /login; wrong role → own workspace; exports 403 for unauthorized roles.
