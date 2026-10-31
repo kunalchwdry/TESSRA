@@ -147,7 +147,7 @@ function TimetableGrid({ sessions, issuesBySession = {}, blocks = [], hrefFor, s
         className="grid min-w-[700px]"
         style={{
           gridTemplateColumns: "76px repeat(5, minmax(0, 1fr))",
-          gridTemplateRows: "40px repeat(4, minmax(84px, auto)) 28px 84px repeat(4, minmax(84px, auto))",
+          gridTemplateRows: `40px repeat(${LUNCH.afterPeriod}, minmax(84px, auto)) 28px repeat(${PERIODS.length - LUNCH.afterPeriod}, minmax(84px, auto))`,
         }}
       >
         <div className="sticky left-0 z-10 border-b border-r border-line bg-subtle" style={{ gridColumn: 1, gridRow: 1 }} />
@@ -199,10 +199,10 @@ function TimetableGrid({ sessions, issuesBySession = {}, blocks = [], hrefFor, s
           </Fragment>
         ))}
 
-        <div className="sticky left-0 z-10 flex items-center border-b border-r border-line bg-subtle px-2 text-[10.5px] font-medium text-ink-3" style={{ gridColumn: 1, gridRow: 7 }}>
+        <div className="sticky left-0 z-10 flex items-center border-b border-r border-line bg-subtle px-2 text-[10.5px] font-medium text-ink-3" style={{ gridColumn: 1, gridRow: LUNCH.afterPeriod + 2 }}>
           Lunch
         </div>
-        <div className="flex items-center justify-center border-b border-line bg-subtle text-[10.5px] font-medium tracking-wide text-ink-3" style={{ gridColumn: "2 / span 5", gridRow: 7 }}>
+        <div className="flex items-center justify-center border-b border-line bg-subtle text-[10.5px] font-medium tracking-wide text-ink-3" style={{ gridColumn: "2 / span 5", gridRow: LUNCH.afterPeriod + 2 }}>
           Lunch break · {LUNCH.start}–{LUNCH.end}
         </div>
 

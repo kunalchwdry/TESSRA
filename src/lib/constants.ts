@@ -48,22 +48,26 @@ export const ROLE_WORKSPACE: Record<Role, string> = {
 export const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"] as const;
 export const DAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri"] as const;
 export const DAY_COUNT = 5;
-export const PERIOD_COUNT = 8;
-export const PERIOD_MINUTES = 50;
+// The role workspaces use the same teaching-day model as the official CIT
+// dataset: nine one-hour periods, with lunch between P5 and P6. Event-only
+// P10–P13 belong to venue bookings and therefore are not teaching-grid rows.
+export const PERIOD_COUNT = 9;
+export const PERIOD_MINUTES = 60;
 
 export const PERIODS: { n: number; start: string; end: string }[] = [
-  { n: 1, start: "09:00", end: "09:50" },
-  { n: 2, start: "09:50", end: "10:40" },
-  { n: 3, start: "10:55", end: "11:45" },
-  { n: 4, start: "11:45", end: "12:35" },
-  { n: 5, start: "13:30", end: "14:20" },
-  { n: 6, start: "14:20", end: "15:10" },
-  { n: 7, start: "15:25", end: "16:15" },
-  { n: 8, start: "16:15", end: "17:05" },
+  { n: 1, start: "08:00", end: "09:00" },
+  { n: 2, start: "09:00", end: "10:00" },
+  { n: 3, start: "10:00", end: "11:00" },
+  { n: 4, start: "11:00", end: "12:00" },
+  { n: 5, start: "12:00", end: "13:00" },
+  { n: 6, start: "14:00", end: "15:00" },
+  { n: 7, start: "15:00", end: "16:00" },
+  { n: 8, start: "16:00", end: "17:00" },
+  { n: 9, start: "17:00", end: "18:00" },
 ];
 
 /** Multi-period sessions may not span the lunch break that follows this period. */
-export const LUNCH = { afterPeriod: 4, start: "12:35", end: "13:30" };
+export const LUNCH = { afterPeriod: 5, start: "13:00", end: "14:00" };
 
 export const ROOM_TYPE_LABEL: Record<RoomType, string> = {
   lecture: "Lecture hall",

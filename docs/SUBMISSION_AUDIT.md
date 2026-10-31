@@ -19,7 +19,7 @@ This is an evidence-based audit against the supplied Crunch Week problem stateme
 - Supplied archive: `tessra-premium-ui-redesign-4.zip`
 - Current GitHub/live implementation and automated test suites
 
-The original PDF was downloaded and checked directly. Its requirements, constraints, submission rules and 100-mark rubric agree with the repository's extracted text; no extra scoring rule was found in the PDF layout.
+The original PDF was downloaded and checked directly. All six pages were also rasterised and visually inspected: there is **no sample timetable, timetable screenshot, mandated grid design or embedded image** to copy. The only visible tables cover role permissions, dataset counts and judging criteria. Its requirements, constraints, submission rules and 100-mark rubric agree with the repository's extracted text; no extra scoring rule was found in the PDF layout.
 
 ## 2. Starter-pack integrity and counts
 
@@ -37,7 +37,7 @@ The JSON and CSV copies agree on the organiser's headline counts:
 | Cancellations | 1 |
 | Exams | 41 |
 
-The calendar has MON–FRI teaching periods P1–P9, event-only periods P10–P13, lunch after P5, and lab starts P2/P6. The priority order and role caps in the JSON match the statement.
+The calendar has MON–FRI teaching periods P1–P9, event-only periods P10–P13, lunch after P5, and three-hour lab starts P2/P6. The priority order and role caps in the JSON match the statement. Both the official CIT workspace and the interactive role workspaces now use this teaching-day model; P10–P13 remain booking-only.
 
 The deployed validator copy is byte-identical to the organiser file:
 
@@ -135,8 +135,9 @@ Information absent from the original message is not guessed. For example, a comp
 
 ## 7. Current test evidence
 
-- TypeScript unit tests: **41/41 passed**
+- TypeScript unit tests: **44/44 passed**
   - 25 booking parser
+  - 3 calendar/lab-rule regression
   - 3 placement explanation
   - 3 LLM boundary/sanitisation
   - 3 navigation

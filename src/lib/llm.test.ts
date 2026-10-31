@@ -22,7 +22,7 @@ test("untrusted model fields are sanitized to scheduling bounds", () => {
     intent: "free_room",
     courseCode: "CS302; DROP TABLE",
     queryDay: 9,
-    periods: [8, 2, 2, 0, 99, "3"],
+    periods: [9, 8, 2, 2, 0, 10, 99, "3"],
     minCapacity: 9000,
     roomKind: "executive_suite",
     applied: true,
@@ -34,7 +34,7 @@ test("untrusted model fields are sanitized to scheduling bounds", () => {
     intent: "free_room",
     courseCode: null,
     queryDay: null,
-    periods: [2, 8],
+    periods: [2, 8, 9],
   });
   assert.equal("applied" in (value as object), false);
   assert.equal("priority" in (value as object), false);

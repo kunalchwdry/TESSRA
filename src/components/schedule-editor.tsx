@@ -56,9 +56,11 @@ function Modal({ title, subtitle, onClose, children, wide }: { title: ReactNode;
   );
 }
 
-function DayPeriodRoom({ session, move, rooms, prefix, defaultRoomId }: { session?: SessionView; move?: Slot; rooms: Room[]; prefix: string; defaultRoomId?: number }) {
+function DayPeriodRoom({ session, move, rooms, prefix, defaultRoomId, kind }: { session?: SessionView; move?: Slot; rooms: Room[]; prefix: string; defaultRoomId?: number; kind?: SessionKind }) {
   const day = move?.day ?? session?.day ?? 0;
   const period = move?.period ?? session?.startPeriod ?? 1;
+  const sessionKind = kind ?? session?.kind;
+  const selectedPeriod = sessionKind === "lab" && period !== 2 && period !== 6 ? 2 : period;
   return (
     <>
       <FormField name="day" label="Day" required htmlFor={`${prefix}-day`}>
@@ -67,8 +69,8 @@ function DayPeriodRoom({ session, move, rooms, prefix, defaultRoomId }: { sessio
         </Select>
       </FormField>
       <FormField name="startPeriod" label="Start period" required htmlFor={`${prefix}-p`}>
-        <Select id={`${prefix}-p`} name="startPeriod" defaultValue={period} key={`${prefix}-p${period}`}>
-          {PERIODS.map((p) => <option key={p.n} value={p.n}>P{p.n} · {p.start}</option>)}
+        <Select id={`${prefix}-p`} name="startPeriod" defaultValue={selectedPeriod} key={`${prefix}-p${selectedPeriod}-${sessionKind ?? "any"}`}>
+          {PERIODS.filter((p) => sessionKind !== "lab" || p.n === 2 || p.n === 6).map((p) => <option key={p.n} value={p.n}>P{p.n} · {p.start}</option>)}
         </Select>
       </FormField>
       <FormField name="roomId" label="Room" hint={session ? "Leave on auto to keep the room, or take the best free one." : "Auto picks the smallest suitable free room."} className="sm:col-span-2" htmlFor={`${prefix}-r`}>
@@ -209,7 +211,10 @@ export function ScheduleEditor({
       {/* Desktop / tablet grid */}
       <div className="scrollbar-thin hidden overflow-x-auto p-2 sm:p-3 md:block">
         <div className="grid min-w-[700px]" role="grid" aria-label="Editable weekly timetable"
-          style={{ gridTemplateColumns: "76px repeat(5, minmax(0,1fr))", gridTemplateRows: "40px repeat(4, minmax(84px,auto)) 28px 84px repeat(4, minmax(84px,auto))" }}>
+          style={{
+            gridTemplateColumns: "76px repeat(5, minmax(0,1fr))",
+            gridTemplateRows: `40px repeat(${LUNCH.afterPeriod}, minmax(84px,auto)) 28px repeat(${PERIODS.length - LUNCH.afterPeriod}, minmax(84px,auto))`,
+          }}>
           <div className="sticky left-0 z-10 border-b border-r border-line bg-subtle" style={{ gridColumn: 1, gridRow: 1 }} />
           {DAYS.map((d, i) => (
             <div key={d} role="columnheader" className={cn("flex items-center justify-between border-b border-line px-3 text-[13px] font-semibold", i < 4 && "border-r", i === today ? "bg-brand-50 text-brand-800" : "bg-subtle text-ink")} style={{ gridColumn: i + 2, gridRow: 1 }}>
@@ -230,8 +235,8 @@ export function ScheduleEditor({
               ))}
             </Fragment>
           ))}
-          <div className="sticky left-0 z-10 flex items-center border-b border-r border-line bg-subtle px-2 text-[10.5px] font-medium text-ink-3" style={{ gridColumn: 1, gridRow: 7 }}>Lunch</div>
-          <div className="flex items-center justify-center border-b border-line bg-subtle text-[10.5px] font-medium text-ink-3" style={{ gridColumn: "2 / span 5", gridRow: 7 }}>
+          <div className="sticky left-0 z-10 flex items-center border-b border-r border-line bg-subtle px-2 text-[10.5px] font-medium text-ink-3" style={{ gridColumn: 1, gridRow: LUNCH.afterPeriod + 2 }}>Lunch</div>
+          <div className="flex items-center justify-center border-b border-line bg-subtle text-[10.5px] font-medium text-ink-3" style={{ gridColumn: "2 / span 5", gridRow: LUNCH.afterPeriod + 2 }}>
             Lunch break · {LUNCH.start}–{LUNCH.end}
           </div>
           {clusters.flatMap((dayClusters, day) =>
@@ -346,11 +351,11 @@ function AddForm({ versionId, slot, courses, faculty, groups, rooms, prefillFacu
           {faculty.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
         </Select>
       </FormField>
-      <FormField name="duration" label="Duration" hint={kind === "lab" ? "Labs run two periods, starting P1/P3/P5/P7." : undefined} htmlFor="add-dur">
+      <FormField name="duration" label="Duration" hint={kind === "lab" ? "Labs run three periods, starting P2 or P6." : undefined} htmlFor="add-dur">
         {kind === "lab" ? (
           <>
-            <input type="hidden" name="duration" value={2} />
-            <div className="flex h-9 items-center rounded-lg border border-line bg-subtle px-3 text-sm text-ink-2">2 periods (lab)</div>
+            <input type="hidden" name="duration" value={3} />
+            <div className="flex h-9 items-center rounded-lg border border-line bg-subtle px-3 text-sm text-ink-2">3 periods (lab)</div>
           </>
         ) : (
           <Select id="add-dur" name="duration" defaultValue={1} key={`dur-${kind}`}>
@@ -372,7 +377,7 @@ function AddForm({ versionId, slot, courses, faculty, groups, rooms, prefillFacu
         </div>
         <FieldError name="groupIds" />
       </fieldset>
-      <DayPeriodRoom move={slot} rooms={rooms} prefix="add" defaultRoomId={prefillRoom} />
+      <DayPeriodRoom move={slot} rooms={rooms} prefix="add" defaultRoomId={prefillRoom} kind={kind} />
       <label className="flex cursor-pointer items-start gap-2.5 text-sm sm:col-span-2">
         <input type="checkbox" name="isFixed" className="mt-0.5 size-4 accent-brand-600" />
         <span>

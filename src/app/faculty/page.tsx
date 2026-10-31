@@ -6,7 +6,7 @@ import { KIND_STYLE, SessionList } from "@/components/timetable";
 import { Badge, ButtonLink, Callout, Card, CardHeader, EmptyState, PageHeader, StatCard } from "@/components/ui";
 import { SUGGESTED_PROMPTS } from "@/lib/assistant";
 import { requireRole } from "@/lib/auth";
-import { DAYS, KIND_LABEL, PERIODS } from "@/lib/constants";
+import { DAY_COUNT, DAYS, KIND_LABEL, PERIOD_COUNT, PERIODS } from "@/lib/constants";
 import { getPublishedTimetable, listChangeRequests, listNotifications } from "@/lib/queries";
 import { cn, currentDayIndex, firstName, hoursFromPeriods, periodLabel, periodTime, plural, toMinutes } from "@/lib/utils";
 
@@ -63,7 +63,7 @@ export default async function FacultyOverviewPage() {
           hint={nextToday ? `Next: ${nextToday.courseCode} at ${PERIODS[nextToday.startPeriod - 1].start}` : todays.length ? "No more classes today" : "A free day"}
         />
         <StatCard label="Weekly teaching hours" value={`${hoursFromPeriods(periods)} h`} icon={Clock} hint={`${plural(mine.length, "session")} · ${plural(periods, "period")}`} href="/faculty/timetable" />
-        <StatCard label="Availability" value={`${40 - blocks.length}/40`} icon={UserCheck} hint={blocks.length ? `${plural(blocks.length, "slot")} marked unavailable` : "Open for every slot"} href="/faculty/availability" />
+        <StatCard label="Availability" value={`${DAY_COUNT * PERIOD_COUNT - blocks.length}/${DAY_COUNT * PERIOD_COUNT}`} icon={UserCheck} hint={blocks.length ? `${plural(blocks.length, "slot")} marked unavailable` : "Open for every slot"} href="/faculty/availability" />
         <StatCard label="Pending change requests" value={pending} icon={ClipboardCheck} tone={pending ? "warning" : "brand"} href="/faculty/requests" hint={`${requests.length} submitted this term`} />
       </section>
 

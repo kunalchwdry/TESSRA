@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { AvailabilityGrid } from "@/components/availability-grid";
 import { Callout, Card, CardHeader, PageHeader } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
-import { DAY_SHORT } from "@/lib/constants";
+import { DAY_COUNT, DAY_SHORT, PERIOD_COUNT } from "@/lib/constants";
 import { getPublishedTimetable } from "@/lib/queries";
 import { plural } from "@/lib/utils";
 
@@ -33,7 +33,7 @@ export default async function FacultyAvailabilityPage() {
         <CardHeader
           icon={UserCheck}
           title="Weekly availability"
-          description={`${plural(40 - blocks.length, "slot")} open · ${plural(blocks.length, "slot")} blocked · ${plural(teaching.length, "teaching period")}`}
+          description={`${plural(DAY_COUNT * PERIOD_COUNT - blocks.length, "slot")} open · ${plural(blocks.length, "slot")} blocked · ${plural(teaching.length, "teaching period")}`}
         />
         <AvailabilityGrid blocks={blocks} teaching={teaching} />
         <div className="flex items-start gap-2 border-t border-line px-5 py-3 text-xs text-ink-2">

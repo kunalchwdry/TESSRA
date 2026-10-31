@@ -38,7 +38,7 @@ function parseDays(text: string) {
 }
 
 function parsePeriods(text: string): number[] | null {
-  const m = text.match(/\bp(?:eriod)?\s*([1-8])(?:\s*(?:-|–|to|and)\s*p?(?:eriod)?\s*([1-8]))?/);
+  const m = text.match(/\bp(?:eriod)?\s*([1-9])(?:\s*(?:-|–|to|and)\s*p?(?:eriod)?\s*([1-9]))?/);
   if (m) {
     const a = Number(m[1]);
     const b = m[2] ? Number(m[2]) : a;
@@ -59,9 +59,9 @@ function parsePeriods(text: string): number[] | null {
     });
     if (period) return [period.n];
   }
-  if (/morning|subah/.test(text)) return [1, 2, 3, 4];
-  if (/afternoon|evening|dopahar|shaam|sham/.test(text)) return [5, 6, 7, 8];
-  if (/all day|whole day|full day|entire day|poora din/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 8];
+  if (/morning|subah/.test(text)) return [1, 2, 3, 4, 5];
+  if (/afternoon|evening|dopahar|shaam|sham/.test(text)) return [6, 7, 8, 9];
+  if (/all day|whole day|full day|entire day|poora din/.test(text)) return Array.from({ length: PERIOD_COUNT }, (_, i) => i + 1);
   return null;
 }
 

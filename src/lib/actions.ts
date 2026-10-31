@@ -169,7 +169,7 @@ export async function createOfferingAction(_prev: ActionState, fd: FormData): Pr
   const roomType: RoomType = course.kind === "lab" ? "lab" : groupIds.length > 1 ? "auditorium" : course.kind === "tutorial" ? "seminar" : "lecture";
   const [o] = await db
     .insert(t.offerings)
-    .values({ courseId: course.id, facultyId: faculty.id, groupIds, sessionsPerWeek: sessionsPerWeek as number, duration: course.kind === "lab" ? 2 : 1, kind: course.kind, roomType })
+    .values({ courseId: course.id, facultyId: faculty.id, groupIds, sessionsPerWeek: sessionsPerWeek as number, duration: course.kind === "lab" ? 3 : 1, kind: course.kind, roomType })
     .returning();
   await audit(user.id, "offering.created", "academics", o.id, `Assigned ${course.code} to ${faculty.name} (${sessionsPerWeek}×/week)`);
   refresh();
@@ -778,10 +778,11 @@ export async function updateSettingsAction(_prev: ActionState, fd: FormData): Pr
 /* ======================= Manual timetable management ====================== */
 function draftRules(draft: { kind: t.SessionKind; duration: number; startPeriod: number }) {
   if (draft.kind === "lab") {
-    if (draft.duration !== 2) return "Lab sessions run for two periods.";
-    if (draft.startPeriod % 2 === 0) return "Labs must start at P1, P3, P5 or P7.";
+    if (draft.duration !== 3) return "Lab sessions run for three periods.";
+    if (draft.startPeriod !== 2 && draft.startPeriod !== 6) return "Labs must start at P2 or P6.";
+  } else if (draft.duration < 1 || draft.duration > 2) {
+    return "Lectures and tutorials run for one or two periods.";
   }
-  if (draft.duration < 1 || draft.duration > 2) return "Sessions run for one or two periods.";
   return null;
 }
 
@@ -809,7 +810,7 @@ export async function manualAddSessionAction(_prev: ActionState, fd: FormData): 
   const [faculty] = await db.select().from(t.users).where(and(eq(t.users.id, facultyId as number), eq(t.users.role, "faculty")));
   if (!course || !faculty) return fail("Course or teacher not found.");
   const kind = course.kind;
-  const duration = kind === "lab" ? 2 : Math.min(2, Math.max(1, num(fd, "duration") ?? 1));
+  const duration = kind === "lab" ? 3 : Math.min(2, Math.max(1, num(fd, "duration") ?? 1));
   const rule = draftRules({ kind, duration, startPeriod: startPeriod as number });
   if (rule) return fail(rule, { startPeriod: rule });
 
@@ -913,7 +914,7 @@ async function requestExtraClass(user: { id: number; name: string }, fd: FormDat
   const [course] = await db.select().from(t.courses).where(eq(t.courses.id, courseId as number));
   if (!course) return fail("Course not found.");
   const kind = course.kind;
-  const duration = kind === "lab" ? 2 : Math.min(2, Math.max(1, num(fd, "duration") ?? 1));
+  const duration = kind === "lab" ? 3 : Math.min(2, Math.max(1, num(fd, "duration") ?? 1));
   const rule = draftRules({ kind, duration, startPeriod: startPeriod as number });
   if (rule) return fail(rule, { startPeriod: rule });
 

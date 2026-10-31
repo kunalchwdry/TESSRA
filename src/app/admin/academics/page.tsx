@@ -57,7 +57,7 @@ export default async function AcademicsPage({ searchParams }: { searchParams: Se
         <FormField name="kind" label="Delivery" required>
           <Select id="kind" name="kind" defaultValue="lecture">
             <option value="lecture">Lecture</option>
-            <option value="lab">Lab (2-period blocks)</option>
+            <option value="lab">Lab (3-hour P2/P6 blocks)</option>
             <option value="tutorial">Tutorial</option>
           </Select>
         </FormField>

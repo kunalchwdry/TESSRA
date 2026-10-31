@@ -47,6 +47,7 @@ export type IssueCode =
   | "faculty_unavailable"
   | "room_unavailable"
   | "spans_break"
+  | "lab_start"
   | "out_of_bounds";
 
 export type Issue = { code: IssueCode; severity: "error" | "warning"; message: string; sessionIds: number[] };
@@ -60,6 +61,7 @@ export const ISSUE_LABEL: Record<IssueCode, string> = {
   faculty_unavailable: "Faculty unavailable",
   room_unavailable: "Room unavailable",
   spans_break: "Spans lunch break",
+  lab_start: "Invalid lab block",
   out_of_bounds: "Outside teaching hours",
 };
 
@@ -94,7 +96,7 @@ export function groupSize(groupIds: number[], groups: Map<number, EngineGroup>) 
   return groupIds.reduce((sum, id) => sum + (groups.get(id)?.size ?? 0), 0);
 }
 
-const PERIOD_PENALTY = [0, 1, 0, 0, 1, 0, 1, 3, 5];
+const PERIOD_PENALTY = [0, 0, 0, 0, 0, 0, 0, 0, 1, 5];
 
 /* -------------------------------------------------------------------------- */
 /* Generation                                                                 */
@@ -178,7 +180,8 @@ export function generateSchedule(input: {
       for (let day = 0; day < DAY_COUNT; day++) {
         if (strict && off.groupIds.some((g) => courseDay.has(`${off.courseId}:${g}:${day}`))) continue;
         for (let start = 1; start + off.duration - 1 <= PERIOD_COUNT; start++) {
-          if (off.duration > 1 && start % 2 === 0) continue;
+          // Three-hour labs use the official P2–P4 or P6–P8 blocks.
+          if (off.kind === "lab" && start !== 2 && start !== 6) continue;
           if (spansBreak(start, off.duration)) continue;
           let free = true;
           for (let p = start; p < start + off.duration && free; p++) {
@@ -265,7 +268,10 @@ export function validateSessions(sessions: EngineSession[], ctx: EngineContext):
       issues.push({ code: "out_of_bounds", severity: "error", message: `${course} is placed outside teaching hours`, sessionIds: [s.id] });
     }
     if (s.duration > 1 && spansBreak(s.startPeriod, s.duration)) {
-      issues.push({ code: "spans_break", severity: "warning", message: `${course} (${where}) runs through the lunch break`, sessionIds: [s.id] });
+      issues.push({ code: "spans_break", severity: "error", message: `${course} (${where}) runs through the lunch break`, sessionIds: [s.id] });
+    }
+    if (s.kind === "lab" && (s.duration !== 3 || (s.startPeriod !== 2 && s.startPeriod !== 6))) {
+      issues.push({ code: "lab_start", severity: "error", message: `${course} (${where}) must use a three-hour P2–P4 or P6–P8 lab block`, sessionIds: [s.id] });
     }
     const room = ctx.rooms.get(s.roomId);
     if (room) {
@@ -274,7 +280,7 @@ export function validateSessions(sessions: EngineSession[], ctx: EngineContext):
         issues.push({ code: "capacity", severity: "error", message: `${course} needs ${size} seats but ${room.code} holds ${room.capacity}`, sessionIds: [s.id] });
       }
       if (s.kind === "lab" && room.type !== "lab") {
-        issues.push({ code: "room_type", severity: "warning", message: `${course} is a lab but ${room.code} is not a laboratory`, sessionIds: [s.id] });
+        issues.push({ code: "room_type", severity: "error", message: `${course} is a lab but ${room.code} is not a laboratory`, sessionIds: [s.id] });
       }
       if (room.status !== "active") {
         issues.push({
@@ -366,7 +372,7 @@ export function findAlternatives(
     if (opts.avoidDays?.includes(day)) continue;
     for (let start = 1; start + target.duration - 1 <= PERIOD_COUNT; start++) {
       if (opts.keepSlot && (day !== target.day || start !== target.startPeriod)) continue;
-      if (target.duration > 1 && start % 2 === 0) continue;
+      if (target.kind === "lab" && start !== 2 && start !== 6) continue;
       if (spansBreak(start, target.duration)) continue;
       let free = true;
       for (let p = start; p < start + target.duration && free; p++) {

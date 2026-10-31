@@ -34,14 +34,15 @@ export function ChangeRequestForm({
   const [groupIds, setGroupIds] = useState<number[]>(offering?.groups.map((g) => g.id) ?? []);
   const [duration, setDuration] = useState(1);
   const [day, setDay] = useState(0);
-  const [period, setPeriod] = useState(1);
-  const effDuration = offering?.kind === "lab" ? 2 : duration;
+  const [period, setPeriod] = useState(offerings[0]?.kind === "lab" ? 2 : 1);
+  const effDuration = offering?.kind === "lab" ? 3 : duration;
   const extraRooms = rooms.filter((r) => (offering?.kind === "lab" ? r.type === "lab" : r.type !== "lab"));
 
   const pickCourse = (id: number) => {
     setCourseId(id);
     const o = offerings.find((x) => x.courseId === id);
     setGroupIds(o?.groups.map((g) => g.id) ?? []);
+    setPeriod(o?.kind === "lab" ? 2 : 1);
   };
 
   const freeSlots = useMemo(() => {
@@ -50,7 +51,7 @@ export function ChangeRequestForm({
     for (let d = 0; d < 5; d++) {
       for (let p = 1; p + effDuration - 1 <= PERIODS.length; p++) {
         if (p <= LUNCH.afterPeriod && p + effDuration - 1 > LUNCH.afterPeriod) continue;
-        if (offering.kind === "lab" && p % 2 === 0) continue;
+        if (offering.kind === "lab" && p !== 2 && p !== 6) continue;
         const periods = Array.from({ length: effDuration }, (_, i) => p + i);
         if (facultyBusy.some((b) => b.day === d && overlaps(p, effDuration, b))) continue;
         if (blocks.some((b) => b.day === d && periods.includes(b.period))) continue;
@@ -104,7 +105,7 @@ export function ChangeRequestForm({
               <FormField name="proposedPeriod" label="Proposed start period" required>
                 <Select id="proposedPeriod" name="proposedPeriod" defaultValue="">
                   <option value="">Select…</option>
-                  {PERIODS.map((p) => <option key={p.n} value={p.n}>P{p.n} · {p.start}</option>)}
+                  {PERIODS.filter((p) => kind !== "lab" || p.n === 2 || p.n === 6).map((p) => <option key={p.n} value={p.n}>P{p.n} · {p.start}</option>)}
                 </Select>
               </FormField>
             </>
@@ -147,7 +148,7 @@ export function ChangeRequestForm({
               </Select>
             </FormField>
           )}
-          {offering.kind === "lab" && <input type="hidden" name="duration" value={2} />}
+          {offering.kind === "lab" && <input type="hidden" name="duration" value={3} />}
           <div className={cn(offering.kind === "lab" && "sm:col-span-2")}>
             <p className="mb-1.5 flex items-center gap-1.5 text-[13px] font-medium text-ink">
               <Sparkles className="size-3.5 text-brand-600" aria-hidden /> Free slots for you &amp; these groups
@@ -174,7 +175,7 @@ export function ChangeRequestForm({
           </FormField>
           <FormField name="startPeriod" label="Start period" required htmlFor="xc-p">
             <Select id="xc-p" name="startPeriod" value={period} onChange={(e) => setPeriod(Number(e.target.value))}>
-              {PERIODS.map((p) => <option key={p.n} value={p.n}>P{p.n} · {p.start}</option>)}
+              {PERIODS.filter((p) => offering.kind !== "lab" || p.n === 2 || p.n === 6).map((p) => <option key={p.n} value={p.n}>P{p.n} · {p.start}</option>)}
             </Select>
           </FormField>
           <FormField name="roomId" label="Room (optional)" hint="Leave on auto — the best free room is reserved for you." className="sm:col-span-2" htmlFor="xc-room">

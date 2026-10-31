@@ -25,7 +25,7 @@ The deterministic scheduler searches and validates alternatives after parsing. A
   "sourceDay": "0..4 or null",
   "targetDay": "0..4 or null",
   "queryDay": "0..4 or null",
-  "periods": "array of 1..8 or null",
+  "periods": "array of 1..9 or null",
   "minCapacity": "positive integer or null",
   "roomKind": "lab | teaching | null"
 }

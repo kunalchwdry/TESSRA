@@ -3,12 +3,12 @@
  * realistic institution on first run. The published timetable is produced by the
  * real scheduling engine — nothing on screen is hard-coded.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { db, pool, getSupabaseAdmin } from "@/db";
 import { BOOTSTRAP_STATEMENTS } from "@/db/bootstrap-sql";
 import * as t from "@/db/schema";
 import { DEMO_PASSWORD, DEMO_ACCOUNTS } from "./constants";
-import { generateVersion, loadEngineState, proposeDisruption, publishVersion, slotRef } from "./engine";
+import { audit, generateVersion, getPublishedVersion, loadEngineState, proposeDisruption, publishVersion, slotRef } from "./engine";
 import { hashPassword } from "./password";
 import { findAlternatives } from "./scheduler";
 import { addDaysIso, parseIso, todayIso } from "./utils";
@@ -36,6 +36,7 @@ async function run() {
     const { rows } = await client.query("select count(*)::int as n from users");
     if ((rows[0]?.n ?? 0) === 0) await seed();
     await ensureBookingExampleRooms();
+    await ensureTeachingCalendarModel();
   } finally {
     await client.query("select pg_advisory_unlock(87412)").catch(() => undefined);
     client.release();
@@ -76,6 +77,38 @@ async function ensureBookingExampleRooms() {
       },
     ])
     .onConflictDoNothing({ target: t.rooms.code });
+}
+
+/**
+ * Upgrade deployments created before the role workspaces adopted the official
+ * nine-period calendar. The advisory lock in `run` makes this idempotent. A new
+ * published version is generated instead of mutating the historical timetable.
+ */
+async function ensureTeachingCalendarModel() {
+  const stale = await db
+    .select({ id: t.offerings.id })
+    .from(t.offerings)
+    .where(and(eq(t.offerings.kind, "lab"), ne(t.offerings.duration, 3)))
+    .limit(1);
+  if (!stale.length) return;
+
+  const published = await getPublishedVersion();
+  await db.update(t.offerings).set({ duration: 3 }).where(eq(t.offerings.kind, "lab"));
+
+  // Legacy two-period labs cannot be carried forward as pinned placements.
+  if (published) {
+    await db
+      .update(t.scheduledSessions)
+      .set({ isFixed: false })
+      .where(and(eq(t.scheduledSessions.versionId, published.id), eq(t.scheduledSessions.kind, "lab")));
+  }
+
+  const { version, stats } = await generateVersion(null, "Automatic alignment to the official nine-period teaching calendar");
+  if (stats.unplaced.length) {
+    throw new Error(`Calendar migration could not place ${stats.unplaced.length} teaching session(s)`);
+  }
+  await publishVersion(version.id);
+  await audit(null, "calendar.aligned", "schedule", version.id, "Aligned role workspaces to P1–P9; labs now use three-hour P2/P6 blocks");
 }
 
 async function seed() {
@@ -262,7 +295,7 @@ async function seed() {
     facultyId,
     groupIds: groups.map((g) => G[g]),
     sessionsPerWeek,
-    duration: kind === "lab" ? 2 : 1,
+    duration: kind === "lab" ? 3 : 1,
     kind,
     roomType: kind === "lab" ? "lab" : groups.length > 1 ? "auditorium" : kind === "tutorial" ? "seminar" : "lecture",
   });
