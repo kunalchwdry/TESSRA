@@ -1,10 +1,14 @@
-import { Mail, ShieldCheck, UserPlus } from "lucide-react";
+import { Mail, ShieldCheck, UserPlus, CheckCircle2 } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { PRODUCT } from "@/lib/constants";
 import { Input, Select, Textarea } from "@/components/ui";
 import { buttonClasses } from "@/components/ui";
+import { db } from "@/db";
+import * as t from "@/db/schema";
+import { hashPassword } from "@/lib/password";
+import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = { title: "Request Access — " + PRODUCT.name };
 export const dynamic = "force-dynamic";
@@ -22,6 +26,48 @@ const CLUBS = [
   { value: "Entrepreneurship Cell", label: "Entrepreneurship Cell" },
   { value: "Photography Club", label: "Photography Club" },
 ];
+
+async function submitAccessRequest(prevState: any, fd: FormData) {
+  const name = (fd.get("name") as string)?.trim();
+  const email = (fd.get("email") as string)?.toLowerCase().trim();
+  const password = (fd.get("password") as string) ?? "";
+  const requestedRole = (fd.get("requestedRole") as string) ?? "";
+  const departmentId = Number(fd.get("departmentId")) || null;
+  const clubId = Number(fd.get("clubId")) || null;
+  const reason = (fd.get("reason") as string)?.trim();
+
+  const errors: Record<string, string> = {};
+  if (!name || name.length < 2) errors.name = "Enter your full name";
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Enter a valid email address";
+  if (!password || password.length < 8) errors.password = "Password must be at least 8 characters";
+  if (!["coordinator", "faculty", "club"].includes(requestedRole)) errors.requestedRole = "Select a valid role";
+  if (!reason || reason.length < 10) errors.reason = "Please explain why you need access (10+ characters)";
+  if (Object.keys(errors).length) return { ok: false, message: "Please fix the highlighted fields.", errors };
+
+  const [existingUser] = await db.select().from(t.users).where(eq(t.users.email, email)).limit(1);
+  if (existingUser) return { ok: false, message: "An account with this email already exists. Please sign in instead.", redirectTo: "/login" };
+  const [existingRequest] = await db.select().from(t.accessRequests).where(eq(t.accessRequests.email, email)).limit(1);
+  if (existingRequest) {
+    return { ok: false, message: "You already have a pending access request. Wait for admin review." };
+  }
+
+  const passwordHash = hashPassword(password);
+  const [reqRow] = await db
+    .insert(t.accessRequests)
+    .values({
+      name,
+      email,
+      passwordHash,
+      requestedRole: requestedRole as typeof t.AccessRequestStatus extends never ? never : requestedRole,
+      departmentId,
+      clubId,
+      reason,
+      status: "pending",
+    })
+    .returning();
+
+  return { ok: true, message: "Access request submitted. An admin will review it shortly.", id: reqRow.id };
+}
 
 export default async function AccessRequestPage() {
   const user = await getCurrentUser();
@@ -44,7 +90,7 @@ export default async function AccessRequestPage() {
         </div>
 
         <div className="rounded-xl border border-line bg-surface shadow-card p-6">
-          <form action="/api/access-requests" method="POST" className="space-y-4">
+          <form action={submitAccessRequest} className="space-y-4">
             <div>
               <label className="block text-[13px] font-medium text-ink">Full name</label>
               <Input name="name" placeholder="Aditi Kapoor" required />
@@ -70,9 +116,7 @@ export default async function AccessRequestPage() {
               <Select name="departmentId">
                 <option value="">Select a department</option>
                 {DEPARTMENTS.map((d) => (
-                  <option key={d.value} value={d.value}>
-                    {d.label}
-                  </option>
+                  <option key={d.value} value={d.value}>{d.label}</option>
                 ))}
               </Select>
             </div>
@@ -81,9 +125,7 @@ export default async function AccessRequestPage() {
               <Select name="clubId">
                 <option value="">Select a club</option>
                 {CLUBS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
+                  <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </Select>
             </div>
