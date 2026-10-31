@@ -72,12 +72,16 @@ export async function POST(req: Request) {
     const supabase = await createSupabaseClient();
     if (supabase) {
       try {
-        await supabase.auth.admin.createUser({
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email,
           password,
           email_confirm: true,
           user_metadata: { role, name },
         });
+        if (authData?.user?.id && !authError) {
+          // Link Supabase Auth UID to local user profile
+          await db.update(t.users).set({ supabaseUid: authData.user.id }).where(eq(t.users.id, newUser.id));
+        }
       } catch (err) {
         console.warn("Supabase auth user creation failed:", err);
         // Non-fatal — local account is already created

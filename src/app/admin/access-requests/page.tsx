@@ -53,12 +53,16 @@ export async function approveAccessRequestForm(fd: FormData) {
     const supabase = await createSupabaseClient();
     if (supabase) {
       try {
-        await supabase.auth.admin.createUser({
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
           email: req.email,
           password: req.passwordHash, // Plain password for Supabase Auth
           email_confirm: true,
           user_metadata: { role: req.requestedRole, name: req.name },
         });
+        if (authData?.user?.id && !authError) {
+          // Link Supabase Auth UID to local user profile
+          await db.update(t.users).set({ supabaseUid: authData.user.id }).where(eq(t.users.id, newUser.id));
+        }
       } catch (err) {
         console.warn("Supabase auth user creation failed:", err);
         // Non-fatal — local account is created, but sign-in via Supabase won't work
