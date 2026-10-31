@@ -149,6 +149,7 @@ Information absent from the original message is not guessed. For example, a comp
 - `npm audit --omit=dev`: zero vulnerabilities
 - Official baseline and repaired exports: zero hard violations
 - Production official-prompt follow-up: **17/17 assertions passed**, with zero product console errors, page errors or HTTP 5xx responses
+- Production role calendar: **60/60 sessions, 70/70 periods, 0 conflicts, 0 unplaced**; five labs all use P2–P4 or P6–P8; P1–P9 grid and lunch visually verified
 
 ## 8. Defensible rating
 

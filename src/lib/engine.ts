@@ -153,13 +153,33 @@ export async function generateVersion(actorId: number | null, notes: string | nu
   return { version, stats: result.stats };
 }
 
+const PUBLISH_LOCK = 87413;
+
+/** Keep publication atomic even when two serverless requests publish together. */
 export async function publishVersion(versionId: number) {
   await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${PUBLISH_LOCK})`);
     await tx.update(t.scheduleVersions).set({ status: "archived" }).where(eq(t.scheduleVersions.status, "published"));
     await tx
       .update(t.scheduleVersions)
       .set({ status: "published", publishedAt: new Date() })
       .where(eq(t.scheduleVersions.id, versionId));
+  });
+}
+
+/** Repair legacy duplicate-published rows left by an interrupted concurrent run. */
+export async function ensureSinglePublishedVersion() {
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(${PUBLISH_LOCK})`);
+    const published = await tx
+      .select({ id: t.scheduleVersions.id })
+      .from(t.scheduleVersions)
+      .where(eq(t.scheduleVersions.status, "published"))
+      .orderBy(desc(t.scheduleVersions.id));
+    const stale = published.slice(1).map((version) => version.id);
+    if (stale.length) {
+      await tx.update(t.scheduleVersions).set({ status: "archived" }).where(inArray(t.scheduleVersions.id, stale));
+    }
   });
 }
 

@@ -3,12 +3,12 @@
  * realistic institution on first run. The published timetable is produced by the
  * real scheduling engine — nothing on screen is hard-coded.
  */
-import { and, eq, ne } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, pool, getSupabaseAdmin } from "@/db";
 import { BOOTSTRAP_STATEMENTS } from "@/db/bootstrap-sql";
 import * as t from "@/db/schema";
 import { DEMO_PASSWORD, DEMO_ACCOUNTS } from "./constants";
-import { audit, generateVersion, getPublishedVersion, loadEngineState, proposeDisruption, publishVersion, slotRef } from "./engine";
+import { ensureSinglePublishedVersion, generateVersion, loadEngineState, proposeDisruption, publishVersion, slotRef } from "./engine";
 import { hashPassword } from "./password";
 import { findAlternatives } from "./scheduler";
 import { addDaysIso, parseIso, todayIso } from "./utils";
@@ -27,38 +27,53 @@ export function ensureSeeded() {
 
 async function run() {
   const client = await pool.connect();
-  let locked = false;
+  const transaction = async (work: () => Promise<void>) => {
+    await client.query("begin");
+    try {
+      await work();
+      await client.query("commit");
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    }
+  };
+
   try {
-    const attempt = await client.query("select pg_try_advisory_lock(87412) as locked");
-    locked = Boolean(attempt.rows[0]?.locked);
-
-    if (!locked) {
-      // A killed serverless invocation can leave a session lock behind while its
-      // pooled connection drains. An already-initialised database is safe to use;
-      // never block every sign-in waiting for that stale lock.
-      const ready = await client.query("select to_regclass('public.users') as t");
-      if (ready.rows[0]?.t) {
-        const { rows } = await client.query("select count(*)::int as n from users");
-        if ((rows[0]?.n ?? 0) > 0) return;
+    // The production pooler uses transaction mode, so session advisory locks are
+    // unsafe: an unlock statement can reach a different backend. Avoid locking
+    // entirely on the normal, already-initialised path.
+    const ready = await client.query("select to_regclass('public.users') as t");
+    if (ready.rows[0]?.t) {
+      const { rows } = await client.query("select count(*)::int as n from users");
+      if ((rows[0]?.n ?? 0) > 0) {
+        await ensureBookingExampleRooms();
+        await ensureSinglePublishedVersion();
+        return;
       }
-
-      // Only an empty installation waits for the active seeder, and that wait is
-      // bounded so a stale connection cannot take the application down.
-      await client.query("set statement_timeout = '10000ms'");
-      await client.query("select pg_advisory_lock(87412)");
-      locked = true;
     }
 
-    const exists = await client.query("select to_regclass('public.users') as t");
-    if (!exists.rows[0]?.t) {
-      for (const stmt of BOOTSTRAP_STATEMENTS) await client.query(stmt);
-    }
-    const { rows } = await client.query("select count(*)::int as n from users");
-    if ((rows[0]?.n ?? 0) === 0) await seed();
-    await ensureBookingExampleRooms();
+    // A transaction-scoped lock is released automatically if a serverless
+    // invocation is killed. First serialize schema creation and commit it so the
+    // separate Drizzle connections used by `seed` can see the tables.
+    await transaction(async () => {
+      await client.query("select pg_advisory_xact_lock(87414)");
+      const exists = await client.query("select to_regclass('public.users') as t");
+      if (!exists.rows[0]?.t) {
+        for (const stmt of BOOTSTRAP_STATEMENTS) await client.query(stmt);
+      }
+    });
+
+    // Serialize data seeding in a second transaction. The lock remains held while
+    // the existing seed routine writes through the pool, and cannot leak beyond
+    // this transaction.
+    await transaction(async () => {
+      await client.query("select pg_advisory_xact_lock(87414)");
+      const { rows } = await client.query("select count(*)::int as n from users");
+      if ((rows[0]?.n ?? 0) === 0) await seed();
+      await ensureBookingExampleRooms();
+      await ensureSinglePublishedVersion();
+    });
   } finally {
-    if (locked) await client.query("select pg_advisory_unlock(87412)").catch(() => undefined);
-    await client.query("set statement_timeout = 0").catch(() => undefined);
     client.release();
   }
 }
@@ -97,38 +112,6 @@ async function ensureBookingExampleRooms() {
       },
     ])
     .onConflictDoNothing({ target: t.rooms.code });
-}
-
-/**
- * Upgrade deployments created before the role workspaces adopted the official
- * nine-period calendar. The advisory lock in `run` makes this idempotent. A new
- * published version is generated instead of mutating the historical timetable.
- */
-export async function ensureTeachingCalendarModel() {
-  const stale = await db
-    .select({ id: t.offerings.id })
-    .from(t.offerings)
-    .where(and(eq(t.offerings.kind, "lab"), ne(t.offerings.duration, 3)))
-    .limit(1);
-  if (!stale.length) return;
-
-  const published = await getPublishedVersion();
-  await db.update(t.offerings).set({ duration: 3 }).where(eq(t.offerings.kind, "lab"));
-
-  // Legacy two-period labs cannot be carried forward as pinned placements.
-  if (published) {
-    await db
-      .update(t.scheduledSessions)
-      .set({ isFixed: false })
-      .where(and(eq(t.scheduledSessions.versionId, published.id), eq(t.scheduledSessions.kind, "lab")));
-  }
-
-  const { version, stats } = await generateVersion(null, "Automatic alignment to the official nine-period teaching calendar");
-  if (stats.unplaced.length) {
-    throw new Error(`Calendar migration could not place ${stats.unplaced.length} teaching session(s)`);
-  }
-  await publishVersion(version.id);
-  await audit(null, "calendar.aligned", "schedule", version.id, "Aligned role workspaces to P1–P9; labs now use three-hour P2/P6 blocks");
 }
 
 async function seed() {
