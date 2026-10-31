@@ -133,3 +133,17 @@ Commit `9146131` deployed successfully through Vercel and was exercised on `http
 - Every checked page stayed within the document viewport; wide tables remain locally scrollable.
 
 **Result: 38 browser assertions passed; 0 console errors, 0 page errors and 0 HTTP 5xx responses.**
+
+## 10. Adversarial AI & explanation production verification
+
+Commit `54fa047` deployed successfully and was tested through the real authenticated UI/API with Club, Faculty and Admin accounts:
+
+- Club UI example chips populated a real editable draft; the flexible 15:00–18:00 window visibly selected 15:00–17:00 and filled attendance/venue fields.
+- Romanised-Hindi word numbers (`chhe`, `aath`, `do`, `pachaas`) produced 18:00–20:00, two hours, 50 attendees and microphone/audio needs.
+- English word numbers, month-first dates, 24-hour times, negated equipment and conditional venue fallbacks were parsed correctly.
+- A prompt impersonating the Dean and demanding institute-event/highest priority remained `club_event` / `normal`; the UI explicitly reported the code-enforced ceiling and refused the bypass wording.
+- Faculty timetable cards opened an exact prefilled “why this slot?” question. The normal Assistant Server Action returned a live-data explanation plus the selected session card.
+- Admin Smart Scheduling displayed the same placement rationale, including fixed/hard-valid status, alternative count, room fit and global heuristic caveat.
+- Laptop and phone journeys had no document overflow.
+
+**Result: 29 browser assertions passed across the combined run; 0 product console errors, 0 page errors and 0 HTTP 5xx responses. No booking or timetable mutation was needed.**
