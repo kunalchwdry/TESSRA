@@ -37,7 +37,7 @@ export default async function AccessRequestPage() {
           <div>
             <h2 className="text-2xl font-semibold tracking-[-0.01em] text-ink">Request Access</h2>
             <p className="mt-1 text-sm text-ink-2">
-              Join {PRODUCT.name} — coordinators, faculty, and club reps need admin approval.
+              Join {PRODUCT.name} — coordinators, faculty, and club representatives need admin approval.
               Administrators can create accounts directly in the Admin Panel.
             </p>
           </div>

@@ -1,7 +1,7 @@
 import { Check, Clock, Mail, UserPlus, X } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { requireRole } from "@/lib/auth";
+import { requireRole, requireUser } from "@/lib/auth";
 import { RoleShell } from "@/components/role-shell";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
@@ -12,10 +12,13 @@ import { fail, ok } from "@/lib/utils";
 export const metadata: Metadata = { title: "Access Requests" };
 export const dynamic = "force-dynamic";
 
-/** Wrapper for Next.js <form action> — server action with admin auth. */
+/** Wrapper for Next.js <form action> — server action with admin/coordinator auth. */
 export async function approveAccessRequestForm(fd: FormData) {
   "use server";
-  await requireRole("admin");
+  const user = await requireUser();
+  if (!user || (user.role !== "admin" && user.role !== "coordinator")) {
+    throw new Error("Admin or Coordinator access required.");
+  }
   const id = Number(fd.get("id"));
   const note = (fd.get("note") as string) || null;
 
@@ -50,7 +53,10 @@ export async function approveAccessRequestForm(fd: FormData) {
 
 export async function rejectAccessRequestForm(fd: FormData) {
   "use server";
-  await requireRole("admin");
+  const user = await requireUser();
+  if (!user || (user.role !== "admin" && user.role !== "coordinator")) {
+    throw new Error("Admin or Coordinator access required.");
+  }
   const id = Number(fd.get("id"));
   const reason = (fd.get("reason") as string) || "";
 
@@ -71,7 +77,10 @@ export async function rejectAccessRequestForm(fd: FormData) {
 }
 
 export default async function AccessRequestsPage() {
-  const user = await requireRole("admin");
+  const user = await requireUser();
+  if (!user || (user.role !== "admin" && user.role !== "coordinator")) {
+    redirect("/login");
+  }
   const [requests] = await Promise.all([
     db
       .select({
@@ -116,6 +125,7 @@ export default async function AccessRequestsPage() {
                 <th className="text-left px-4 py-3 font-semibold">Requested Role</th>
                 <th className="text-left px-4 py-3 font-semibold">Department / Club</th>
                 <th className="text-left px-4 py-3 font-semibold">Status</th>
+                <th className="text-left px-4 py-3 font-semibold">Reviewed By</th>
                 <th className="text-left px-4 py-3 font-semibold">Requested</th>
                 <th className="px-4 py-3 font-semibold">Action</th>
               </tr>
@@ -142,6 +152,7 @@ export default async function AccessRequestsPage() {
                         {statusIcon} {r.status}
                       </span>
                     </td>
+                    <td className="px-4 py-3">{r.reviewerName ?? "—"}</td>
                     <td className="px-4 py-3 text-ink-2">{new Date(r.createdAt).toLocaleDateString()}</td>
                     <td className="px-4 py-3">
                       {r.status === "pending" ? (
@@ -176,7 +187,7 @@ export default async function AccessRequestsPage() {
               })}
               {requests.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-ink-3">
+                  <td colSpan={8} className="px-4 py-8 text-center text-ink-3">
                     No access requests.
                   </td>
                 </tr>

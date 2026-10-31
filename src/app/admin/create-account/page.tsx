@@ -32,9 +32,9 @@ export default async function CreateAccountPage() {
       <div className="space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-ink">Create Account</h1>
+            <h1 className="text-2xl font-semibold text-ink">Create Admin Account</h1>
             <p className="text-sm text-ink-2">
-              Create a new account directly. Approval is instant — no request flow needed.
+              Create a new administrator account directly. Instant approval — no request flow needed.
             </p>
           </div>
           <a href="/admin/access-requests" className="inline-flex items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5 text-sm font-semibold text-ink-2 hover:bg-subtle hover:text-ink transition-colors">
@@ -97,7 +97,8 @@ export default async function CreateAccountPage() {
               <h3 className="font-semibold">How it works</h3>
               <ul className="mt-2 space-y-1 text-sm text-green-800/80 list-disc list-inside">
                 <li>
-                  The account is created instantly with <strong>approved</strong> status.
+                  As an administrator, you can create new accounts instantly with{" "}
+                  <strong>approved</strong> status.
                 </li>
                 <li>
                   The new user can sign in immediately with their email and password.
