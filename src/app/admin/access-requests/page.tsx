@@ -139,7 +139,8 @@ export default async function AccessRequestsPage() {
           </a>
         </div>
 
-        <div className="rounded-xl border border-line bg-surface shadow-card">
+        <div className="rounded-xl border border-line bg-surface shadow-card overflow-x-auto">
+          <div className="min-w-[850px]">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line text-ink-3">
@@ -217,6 +218,7 @@ export default async function AccessRequestsPage() {
               )}
             </tbody>
           </table>
+          </div>
         </div>
 
         {requests.some((r) => r.status === "pending") && (
