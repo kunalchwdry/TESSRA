@@ -4,97 +4,218 @@
 
 Built for the Crunch Week problem statement (Chilika Institute of Technology): timetable generation, Spectra-week venue bookings, midsem exams and disruption repair — with an OR-Tools CP-SAT engine graded by the organisers' own validator.
 
-## Live demo & accounts
+---
 
-Live link: the sandbox preview URL (see submission). No public registration — use these demo accounts (password for all: `tessra123`):
+## 🔗 Live Links
 
-| Role | Email |
-|---|---|
-| Admin (Dean's office) | `admin@westbrook.edu` |
-| Department Coordinator | `coordinator.cse@westbrook.edu` |
-| Faculty | `ananya.rao@westbrook.edu` |
-| Club Representative | `robotics@westbrook.edu` |
+| Service | URL |
+|---------|-----|
+| **Production (Vercel)** | https://tessra-five.vercel.app |
+| **Demo App (Scheduling preview)** | https://3000-inghsegmc8x5dhvl7czr0.e2b.app/admin/scheduling?version=5&view=group&id=4 |
+| **GitHub Repository** | https://github.com/kunalchwdry/TESSRA.git |
 
-**Judges' path:** sign in as Admin → **Official Dataset (CIT)** in the sidebar → **Generate schedule** (CP-SAT, ~30 s) → the official validator's report appears (0 hard violations) → browse the timetable by group/faculty/room, booking decisions with reasons, exam allocation → download `schedule.json`. Then **Apply sample disruption** → repaired timetable with moved sessions highlighted → download `schedule_after.json`.
+> ⚠️ **No public registration.** Use the demo accounts below (password for all: `tessra123`).
 
-If the embedded preview panel blocks cookies (Safari/iOS), the sign-in screen shows a direct link — open it in its own tab.
+---
 
-## Official results (validator.py, unmodified)
+## 👥 Demo Accounts
 
-| Export | Hard violations | Soft | Bookings | Stability |
-|---|---|---|---|---|
-| `exports/schedule.json` | **0** | 3 | 65.5 / 70 · 0 inversions | — |
-| `exports/schedule_after.json` | **0** | 3 | — | 10 sessions moved |
+All four demo accounts use password **`tessra123`** and are pre-approved.
 
-Both files are produced by the app's engine, never by hand. Reports: `exports/report*.json`.
-The booking score depends on which optimal timetable CP-SAT finds (62–65.5 observed across runs); hard violations and priority inversions are 0 in every run, and the two legitimate rejections are the cancelled BR-04 and BR-09 (needs 1,200 seats; the largest venue holds 800).
+| Role | Email | Dashboard |
+|------|-------|-----------|
+| **Admin** (Dean's office) | `admin@westbrook.edu` | `/admin` |
+| **Department Coordinator** | `coordinator.cse@westbrook.edu` | `/coordinator` |
+| **Faculty** | `ananya.rao@westbrook.edu` | `/faculty` |
+| **Club Representative** | `robotics@westbrook.edu` | `/club` |
 
-## Quick start
+### Full access credentials
+
+See **[access.md](./access.md)** for the complete list of accounts, passwords, Supabase project details, Vercel deployment info, and database migration data.
+
+---
+
+## 🏗 Architecture
+
+```mermaid
+flowchart TD
+    Client[Browser / Next.js App Router] -->|HTTP| API[API Routes]
+    API --> Auth[(Supabase Auth)]
+    API --> DB[(PostgreSQL + Drizzle ORM)]
+    API --> Engine[Python FastAPI + OR-Tools CP-SAT]
+    Engine --> Validator[Official validator.py]
+    Auth -->|RLS policies| DB
+    Admin[Admin Panel] -->|Approve/reject| AccessReq[Access Requests]
+    AccessReq --> DB
+    subgraph "Roles"
+        Admin
+        Coord[Coordinator]
+        Fac[Faculty]
+        Club[Club Rep]
+    end
+    Client -->|Role-based routing| Admin
+    Client --> Coord
+    Client --> Fac
+    Client --> Club
+```
+
+---
+
+## 🔐 Authentication Flow
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant L as Login Page
+    participant A as /api/auth/login
+    participant S as Supabase Auth
+    participant D as PostgreSQL (users table)
+
+    U->>L: Enter email + password
+    L->>A: POST credentials
+    A->>S: signInWithPassword
+    alt Supabase user exists
+        S-->>A: Auth token + user id
+        A->>D: Look up local profile by supabase_uid
+        D-->>A: User row (role, approvalStatus)
+        A-->>L: 200 OK + redirectTo
+        L->>U: Redirect to role dashboard
+    else User not in Supabase Auth (stuck account)
+        A->>D: Check local users table (approved, no supabaseUid)
+        D-->>A: Local user found
+        A->>S: admin.createUser (service role key)
+        S-->>A: New Auth user created
+        A->>D: Link supabase_uid to local profile
+        A-->>L: 200 OK + redirectTo
+        L->>U: Redirect to role dashboard
+    else Invalid credentials
+        S-->>A: Error
+        A-->>L: 401 Email or password incorrect
+        L->>U: Show error banner
+    end
+```
+
+---
+
+## 📋 Access Request Flow
+
+```mermaid
+flowchart TD
+    Start[User visits /access-request] --> Form[Fill form: name, email, password, role, dept/club, reason]
+    Form --> POST[POST /api/access-requests]
+    POST --> Store[Store in access_requests table (status: pending)]
+    Store --> Email[Success banner shown]
+    Admin[Admin visits /admin/access-requests] --> Table[View pending requests table]
+    Table --> Approve[Click Approve]
+    Approve --> Create[Create local user record]
+    Create --> SupabaseAuth[Create Supabase Auth user via service role key]
+    SupabaseAuth --> Link[Link supabase_uid to local profile]
+    Link --> Update[Mark request as approved]
+    Update --> Notify[User can now sign in with email + password]
+```
+
+---
+
+## 🚀 Quick Start
 
 ```bash
+# 1. Clone the repository
+git clone https://github.com/kunalchwdry/TESSRA.git
+cd TESSRA
+
+# 2. Install dependencies
 npm install
-cp .env.example .env             # defaults work in the sandbox
-python3 -m pip install ortools fastapi "uvicorn[standard]" pytest
-npx drizzle-kit push             # schema (app also self-bootstraps an empty DB)
-npm run dev                      # or: npm run build && npm start
 
-# official pipeline from the CLI (same code the app runs)
-python3 engine/solve.py --data official/starterpack/CrunchWeek_StarterPack/data/cit_public.json --out exports/schedule.json
-python3 official/starterpack/CrunchWeek_StarterPack/validator.py \
-  --data official/starterpack/CrunchWeek_StarterPack/data/cit_public.json --schedule exports/schedule.json
+# 3. Set up environment
+cp .env.example .env
+# Edit .env with your Supabase credentials (see access.md for production values)
 
-# tests
-python3 -m pytest engine/tests -q     # 23 tests incl. official end-to-end + constraint regressions
+# 4. Set up database
+npx drizzle-kit push   # generates and applies schema (26 tables)
+# or for local dev with PostgreSQL:
+# DATABASE_URL=postgresql://localhost:5432/tessra npx drizzle-kit push
+
+# 5. Run the dev server
+npm run dev
+# Open http://localhost:3000
+
+# 6. Run tests
 npm exec tsc -- --noEmit && npm run build && npx eslint .
+python3 -m pytest engine/tests -q
 ```
 
 ### Supabase setup (production)
 
 TESSRA supports two auth modes:
 
-1. **Custom session auth (default, no setup needed)** — works out of the box with
-   local PostgreSQL. Demo accounts are seeded automatically.
+1. **Custom session auth (default)** — works out of the box with local PostgreSQL.
 2. **Supabase Auth (recommended for production)** — set these in `.env`:
 
-   ```
-   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://lsdytdpaqogcvutaordj.supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key   # server-only
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
    DATABASE_URL=your-supabase-postgres-connection-string
    ```
 
    Then run the RLS migration:
-   ```
+   ```bash
    psql $DATABASE_URL < supabase/migrations/20261031000001_rls_policies.sql
    ```
 
-   With Supabase configured, the app uses Supabase Auth for sign-in/sign-up,
-   session persistence, and password reset. Custom session cookies are disabled.
+---
 
-## Demo accounts (password for all: `tessra123`)
+## 📊 Official Results (validator.py, unmodified)
 
-| Role | Email |
-|------|-------|
-| Admin (Dean's office) | `admin@westbrook.edu` |
-| Department Coordinator | `coordinator.cse@westbrook.edu` |
-| Faculty | `ananya.rao@westbrook.edu` |
-| Club Representative | `robotics@westbrook.edu` |
+| Export | Hard violations | Soft | Bookings | Stability |
+|--------|----------------|------|----------|-----------|
+| `exports/schedule.json` | **0** | 3 | 65.5 / 70 · 0 inversions | — |
+| `exports/schedule_after.json` | **0** | 3 | — | 10 sessions moved |
 
-New users can also request access at `/access-request`. An admin must approve
-the request before the account can sign in.
+Both files are produced by the app's engine, never by hand. Reports: `exports/report*.json`.
 
-Next.js (App Router) · TypeScript strict · Tailwind · PostgreSQL + Drizzle (Supabase-ready) · Python FastAPI + **Google OR-Tools CP-SAT** (`engine/`, deploy separately; `ENGINE_URL`) · Lucide icons.
+The booking score depends on which optimal timetable CP-SAT finds (62–65.5 observed across runs); hard violations and priority inversions are 0 in every run.
 
-## Repository
-- `engine/` — CP-SAT model (hard H1–H14, soft S1–S6 with official weights), bookings (official priority/caps/cancellations), exams (half capacity), minimal-move repairs, CLI + FastAPI + pytest
-- `official/` — untouched starter pack + problem statement
-- `exports/` — app-produced `schedule.json`, `schedule_after.json`, validator reports
-- `src/` — four role workspaces, `/admin/official` pipeline UI, auth, audit, notifications
-- **Coursework** — teachers plan syllabus, assignments and resources per course; admins oversee and edit all courses
-- **Manual scheduling** — admin drag-and-drop editor (add/move/pin/remove classes for any teacher) and faculty extra-class requests with free-slot suggestions, approved by the admin in the Approval Centre
-- `docs/` — REQUIREMENTS_TRACEABILITY · DATA_DICTIONARY · ARCHITECTURE · DEPLOYMENT · TESTING
-- `AI_USAGE.md` — full AI declaration (runtime assistant is deterministic; no LLM required)
-- `IMPLEMENTATION_STATUS.md` — exactly what works, what's tested, what's pending
+---
 
-## Known limitations
-Role dashboards currently run on a demo dataset while the official CIT pipeline lives in `/admin/official`; Supabase Auth/RLS and Vercel/Render hosting are prepared but need team accounts (docs/DEPLOYMENT.md). Details in IMPLEMENTATION_STATUS.md.
+## 📁 Repository Structure
+
+```
+engine/          — CP-SAT model (hard H1–H14, soft S1–S6), bookings, exams, repairs, CLI + FastAPI + pytest
+official/        — Untouched starter pack + problem statement
+exports/         — App-produced schedule.json, schedule_after.json, validator reports
+src/             — Next.js App Router: four role workspaces, auth, audit, notifications
+docs/            — REQUIREMENTS_TRACEABILITY · DATA_DICTIONARY · ARCHITECTURE · DEPLOYMENT · TESTING
+access.md        — Complete access credentials (this repo)
+AI_USAGE.md      — Full AI declaration
+IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
+```
+
+---
+
+## 🎯 Key Features
+
+- **Four roles** with Row Level Security (RLS): Admin, Coordinator, Faculty, Club Representative
+- **Access requests** — non-admin roles must request access; admin approves/rejects
+- **Instant account creation** — admin can create accounts directly at `/admin/create-account`
+- **Supabase Auth** — email/password auth with email confirmation enabled
+- **Notifications** — in-app notification system
+- **Audit logs** — complete audit trail of all actions
+- **Timetable/booking validation** — conflict-checked with suggested alternatives
+- **CP-SAT engine** — constraint-aware timetable generation with official validator
+- **Demo accounts** — four pre-seeded accounts for evaluation
+
+---
+
+## 📄 Documentation
+
+- `docs/ARCHITECTURE.md` — System design and component overview
+- `docs/DEPLOYMENT.md` — Vercel + Supabase deployment guide
+- `docs/DATA_DICTIONARY.md` — All 26 tables and their fields
+- `docs/REQUIREMENTS_TRACEABILITY.md` — Requirement → implementation mapping
+- `docs/TESTING.md` — Test strategy and coverage
+- `IMPLEMENTATION_STATUS.md` — Current implementation state
+
+---
+
+**Built with:** Next.js (App Router) · TypeScript · Tailwind CSS · PostgreSQL + Drizzle ORM · Supabase Auth · Python FastAPI · Google OR-Tools CP-SAT · Lucide Icons
