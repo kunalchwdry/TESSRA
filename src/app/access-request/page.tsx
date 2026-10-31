@@ -58,7 +58,7 @@ async function submitAccessRequest(prevState: any, fd: FormData) {
       name,
       email,
       passwordHash,
-      requestedRole: requestedRole as typeof t.AccessRequestStatus extends never ? never : requestedRole,
+      requestedRole: requestedRole as "coordinator" | "faculty" | "club",
       departmentId,
       clubId,
       reason,
