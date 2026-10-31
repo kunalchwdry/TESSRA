@@ -133,7 +133,16 @@ export const ROOM_FEATURES = [
   "Stage lighting",
 ];
 
-export const BOOKING_NEEDS = ["Projector", "Audio system", "Microphones", "Stage lighting", "Recording", "Wi-Fi access"];
+export const BOOKING_NEEDS = [
+  "Projector",
+  "Audio system",
+  "Microphones",
+  "Stage lighting",
+  "Recording",
+  "Wi-Fi access",
+  "Lab workstations",
+  "Accessibility",
+];
 
 export const DEMO_PASSWORD = "tessra123";
 

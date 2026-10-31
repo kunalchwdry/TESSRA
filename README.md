@@ -11,7 +11,6 @@ Built for the Crunch Week problem statement (Chilika Institute of Technology): t
 | Service | URL |
 |---------|-----|
 | **Production (Vercel)** | https://tessra-five.vercel.app |
-| **Demo App (Scheduling preview)** | https://3000-inghsegmc8x5dhvl7czr0.e2b.app/admin/scheduling?version=5&view=group&id=4 |
 | **GitHub Repository** | https://github.com/kunalchwdry/TESSRA.git |
 
 > ⚠️ **No public registration.** Use the demo accounts below (password for all: `tessra123`).
@@ -118,13 +117,16 @@ flowchart TD
 
 ## 🚀 Quick Start
 
+Prerequisites: **Node.js 22+**, Python 3.10+ and PostgreSQL.
+
 ```bash
 # 1. Clone the repository
 git clone https://github.com/kunalchwdry/TESSRA.git
 cd TESSRA
 
 # 2. Install dependencies
-npm install
+npm ci
+python3 -m pip install -r engine/requirements.txt pytest
 
 # 3. Set up environment
 cp .env.example .env
@@ -170,11 +172,9 @@ TESSRA supports two auth modes:
 | Export | Hard violations | Soft | Bookings | Stability |
 |--------|----------------|------|----------|-----------|
 | `exports/schedule.json` | **0** | 3 | 65.5 / 70 · 0 inversions | — |
-| `exports/schedule_after.json` | **0** | 3 | — | 10 sessions moved |
+| `exports/schedule_after.json` | **0** | 3 | — | **8 sessions moved** (2 time, 6 room-only) |
 
-Both files are produced by the app's engine, never by hand. Reports: `exports/report*.json`.
-
-The booking score depends on which optimal timetable CP-SAT finds (62–65.5 observed across runs); hard violations and priority inversions are 0 in every run.
+Both files were produced by `engine/solve.py`, not edited by hand, and then checked with the unmodified organiser `validator.py`. Reports: `exports/report.json` and `exports/report_after.json`.
 
 ---
 
@@ -202,8 +202,20 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 - **Notifications** — in-app notification system
 - **Audit logs** — complete audit trail of all actions
 - **Timetable/booking validation** — conflict-checked with suggested alternatives
-- **CP-SAT engine** — constraint-aware timetable generation with official validator
+- **English/Hinglish booking intake** — fills the real editable form, exposes assumptions, asks for missing essentials and revalidates on submit
+- **Faculty AI schedule assistant** — optional LLM intent proposal, deterministic constraint validation, human submission and coordinator approval
+- **CP-SAT engine** — exact H1–H14 model and S1–S6 objective, official booking/exam allocation and minimal-move repair
+- **Safe Admin reset** — one-click clean demo state with complete timetable regeneration; accounts/reference data and the active login are preserved
 - **Demo accounts** — four pre-seeded accounts for evaluation
+
+---
+
+## Known limitations
+
+- The four role workspaces use a compact seeded campus dataset for fast judging; the full official CIT dataset, bookings, exams, validator report and disruption repair are presented under `/admin/official`.
+- The committed official workflow loads the organiser-provided CIT dataset and sample disruption. Uploading an arbitrary replacement dataset/change file is not yet exposed in the UI.
+- Running CP-SAT from a serverless deployment requires `ENGINE_URL` to point to the included FastAPI service. Local development can run `engine/solve.py` directly.
+- External LLM intent parsing is optional and requires a team-supplied key. The deterministic assistant, English/Hinglish booking parser and manual booking form work without it.
 
 ---
 
@@ -213,6 +225,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 - `docs/DEPLOYMENT.md` — Vercel + Supabase deployment guide
 - `docs/DATA_DICTIONARY.md` — All 26 tables and their fields
 - `docs/REQUIREMENTS_TRACEABILITY.md` — Requirement → implementation mapping
+- `docs/CONSTRAINT_VERIFICATION.md` — H1–H14/S1–S6 model and executed validator evidence
 - `docs/TESTING.md` — Test strategy and coverage
 - `IMPLEMENTATION_STATUS.md` — Current implementation state
 

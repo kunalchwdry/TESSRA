@@ -5,9 +5,9 @@ All commands below were executed in the sandbox; headline results are recorded. 
 ## 1. Scheduling engine (pytest)
 ```
 python3 -m pytest engine/tests -q
-→ 23 passed
+→ 29 passed
 ```
-Covers: H2/H3/H4 clashes, H5 capacity, H6 type/allowed_uses, H7 faculty unavailability, H8 room unavailability, H9 lab starts + lunch, H10 accessibility, H11 baskets (same time, different rooms, no group clash inside basket), H12 daily limit, H14 fixed slots, infeasibility explained (never faked), booking priority caps + tiebreak, cancellations, capacity rejection reasons, mandatory groups, exam half-capacity/multi-room/group clash, disruption semantics, and the **official end-to-end test** (solve → official validator → 0 hard; repair → 0 hard, ≤20 moved).
+Covers: H1 missing/unknown sessions; H2/H3/H4 clashes; H5 capacity; H6 room type; H7 faculty unavailability; H8 room unavailability; H9 lab starts + lunch; H10 accessibility; H11 baskets; H12 daily limits; H13 booking clashes/mandatory groups; H14 fixed slots; individual S1–S6 objective weights; infeasibility explanations; booking role caps, tiebreaks, cancellations and rejection reasons; exam half-capacity/multi-room/group clashes; disruption semantics; and the **official end-to-end test** (solve → official validator → 0 hard; repair → 0 hard and minimal moves).
 
 ## 2. Official validator (the organisers' file, unmodified)
 ```
@@ -26,19 +26,21 @@ python3 engine/solve.py --data ... --out exports/schedule_after.json \
 python3 official/.../validator.py --data ... --schedule exports/schedule_after.json \
     --disruption ... --baseline exports/schedule.json --json exports/report_after.json
 → Hard violations: 0  {}
-→ Soft penalty: 3 (optimal) · Stability: 10 sessions moved (5 changed time, 5 room only)
-  Repair objective = 3.0 ⇒ zero discretionary moves; all 10 are forced by the change file
+→ Soft penalty: 3 (optimal) · Stability: 8 sessions moved (2 changed time, 6 room only)
+  Repair objective = 3.0 ⇒ zero discretionary moves; all 8 are forced by the change file
 ```
 Rejections are legitimate: BR-04 is on the official cancellations list; BR-09 needs 1,200 seats and the largest matching venue holds 800.
 
 ## 3. Web application
 ```
-npx next typegen            → types generated
-npm exec tsc -- --noEmit    → 0 errors
-npm run build               → all routes compiled (App Router)
-npx eslint .                → 0 problems
-build_and_start (platform)  → /api/health {"ok":true}
+npm run test:parser         → 6/6 English/Hinglish parser tests passed
+npm run typecheck           → 0 errors
+npm run lint                → 0 problems
+npm run build               → all routes compiled (Next.js 16.4.3 App Router)
+npm audit --omit=dev        → 0 production vulnerabilities
 ```
+
+Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions and follow-up questions for missing essentials.
 
 ## 4. Runtime & security checks (executed against the live preview)
 - Every route of all four roles → HTTP 200 with real data; anon → /login; wrong role → own workspace; exports 403 for unauthorized roles.
@@ -61,12 +63,15 @@ Bugs found in `engine/core.py` by code audit, fixed in place (no architecture ch
 | 2 | Mandatory groups not re-checked after displacement | Moving the room conflict alone could still clash with the event's mandatory group (H13) | Final `slot_free` verification of room **and** mandatory groups on the post-move week | `test_override_refused_when_mandatory_group_still_busy` |
 | 3 | Displacement destination search accepted slots that still overlapped the event being placed | Search picked a "valid timetable" slot that kept the event room busy → whole attempt rejected | Destinations that keep the event room (or its mandatory groups) busy during the event are excluded up front | same as #1 (escape-slot assertion) |
 | 4 | Exam room picker filled ascending | Up to ~10 tiny rooms for a 360-seat exam; wasted capacity risked E1 on tighter inputs | `pick_exam_rooms`: exact single fit first, descending coverage, largest hall preserved when the rest suffice (now ≤5 rooms/exam, 63 total room-uses) | `test_exam_room_picker_fewest_rooms_and_preserves_big_hall` |
-| 5 | No solver seed | Booking score varied run-to-run without reproducibility | `random_seed = 42` (optimal timetables may still differ across worker interleavings; hard guarantees unchanged) | `test_solver_deterministic_with_seed` |
+| 5 | No solver seed | Booking score varied run-to-run without reproducibility | `random_seed = 42`; the determinism test uses single-worker search while production uses a bounded two-worker portfolio | `test_solver_deterministic_with_seed` |
+| 6 | S2 gap variables were created only for already-occupied periods | Real empty periods between classes could not add an S2 objective cost | Exact before/after/not-occupied Boolean formulation, including elective-basket group occupancy | `test_soft_s2_counts_an_actual_empty_period_between_classes` |
+| 7 | Basket group occupancy used only one representative member's groups | A basket with non-identical member group lists could under-model H3/S2/S3 | Union all basket member groups and apply the shared basket-time variable exactly once per group | basket tests + official validator |
+| 8 | Eight parallel CP-SAT portfolios exhausted memory on the exact S2 model | Official run could be killed despite a small optimal score | Default reduced to two workers; the exact model now proves optimal in ~22 seconds in the verification environment | official end-to-end test |
 
 Also verified by design + tests: fixed-slot classes are never displaced (H14), basket sessions are never moved alone (H11), clubs capped to club_event can never displace classes (`test_club_cannot_displace_classes`), P10–P13 remain event-only (solver bound P1–P9), exam capacity halved.
 
 Post-fix official validator (both exports, plus independent re-run on the files downloaded through the live UI):
-**0 hard violations · soft 3 (provably optimal) · bookings 65.5/70 · 0 priority inversions · repair 10 forced moves.**
+**0 hard violations · soft 3 (provably optimal) · bookings 65.5/70 · 0 priority inversions · repair 8 forced moves.**
 
 ## 7. Manual scheduling & extra-class approval (runtime tests)
 

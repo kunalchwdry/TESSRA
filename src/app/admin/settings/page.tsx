@@ -1,6 +1,7 @@
 import { Building, Clock, LogOut, Save, Ticket, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import { ActionForm, FormField, SubmitButton } from "@/components/client";
+import { ResetDemoDataButton } from "@/components/reset-demo-data";
 import { Avatar, Badge, Button, Card, CardBody, CardHeader, Checkbox, Input, KeyValue, PageHeader, Table, TableWrap, TD, TH, THead, TR } from "@/components/ui";
 import { logoutAction, updateSettingsAction } from "@/lib/actions";
 import { requireRole } from "@/lib/auth";
@@ -110,6 +111,19 @@ export default async function SettingsPage() {
                 </tbody>
               </Table>
             </TableWrap>
+          </Card>
+          <Card>
+            <CardHeader
+              title="Clean demo state"
+              description="Clear mutable activity and publish a freshly generated timetable while preserving accounts and academic reference data."
+              action={<ResetDemoDataButton compact />}
+            />
+            <CardBody>
+              <p className="text-xs leading-5 text-ink-3">
+                The reset is guarded by an administrator role check and refuses to replace the current timetable
+                unless every required session is placed.
+              </p>
+            </CardBody>
           </Card>
         </div>
       </div>

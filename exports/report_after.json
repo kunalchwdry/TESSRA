@@ -12,20 +12,18 @@
   },
   "soft_total": 3,
   "stability": {
-    "sessions_moved": 10,
-    "time_changed": 5,
-    "room_only_changed": 5,
+    "sessions_moved": 8,
+    "time_changed": 2,
+    "room_only_changed": 6,
     "moved_ids": [
-      "CS101-A-L1",
+      "CE302-L1",
       "CS202-T1",
-      "CS203-L3",
-      "CS303-L2",
+      "CS203-L1",
+      "EC303-L3",
       "EE303-L3",
-      "HS101-A-L1",
-      "HS101-D-L2",
-      "ME202-L2",
-      "OE303-L2",
-      "PH101-A-L3"
+      "HS101-D-L1",
+      "MA101-A-T1",
+      "ME302-L3"
     ]
   },
   "hard_violations": [],

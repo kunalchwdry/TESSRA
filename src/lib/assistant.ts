@@ -11,27 +11,28 @@ import type { AssistantPayload } from "@/db/schema";
 import type { CurrentUser } from "./auth";
 import { DAYS, DAY_SHORT, PERIOD_COUNT } from "./constants";
 import { getPublishedVersion, loadEngineState, slotRef } from "./engine";
+import { proposeFacultyIntent } from "./llm";
 import { findAlternatives, validateSessions, type EngineSession } from "./scheduler";
 import { currentDayIndex, hoursFromPeriods, periodLabel, periodTime, toMinutes } from "./utils";
 
 type Reply = { content: string; payload: AssistantPayload | null };
 
 const DAY_PATTERNS: [RegExp, number][] = [
-  [/\bmon(day)?\b/g, 0],
-  [/\btue(s|sday)?\b/g, 1],
-  [/\bwed(nesday)?\b/g, 2],
-  [/\bthu(r|rs|rsday)?\b/g, 3],
-  [/\bfri(day)?\b/g, 4],
+  [/\b(mon(day)?|somv?aar|somwar)\b/g, 0],
+  [/\b(tue(s|sday)?|mangalv?aar|mangalwar)\b/g, 1],
+  [/\b(wed(nesday)?|budhv?aar|budhwar)\b/g, 2],
+  [/\b(thu(r|rs|rsday)?|guruv?aar|guruwar)\b/g, 3],
+  [/\b(fri(day)?|shukrav?aar|shukrawar)\b/g, 4],
 ];
 
 function parseDays(text: string) {
   const found: { day: number; index: number }[] = [];
   for (const [re, day] of DAY_PATTERNS) for (const m of text.matchAll(re)) found.push({ day, index: m.index ?? 0 });
   const today = currentDayIndex();
-  const t1 = text.indexOf("today");
-  if (t1 >= 0) found.push({ day: today < 0 ? 0 : today, index: t1 });
-  const t2 = text.indexOf("tomorrow");
-  if (t2 >= 0) found.push({ day: today < 0 || today === 4 ? 0 : today + 1, index: t2 });
+  const todayMatch = /\b(today|aaj)\b/.exec(text);
+  if (todayMatch) found.push({ day: today < 0 ? 0 : today, index: todayMatch.index });
+  const tomorrowMatch = /\b(tomorrow|kal)\b/.exec(text);
+  if (tomorrowMatch) found.push({ day: today < 0 || today === 4 ? 0 : today + 1, index: tomorrowMatch.index });
   return found.sort((a, b) => a.index - b.index);
 }
 
@@ -42,9 +43,9 @@ function parsePeriods(text: string): number[] | null {
     const b = m[2] ? Number(m[2]) : a;
     return Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => Math.min(a, b) + i);
   }
-  if (/morning/.test(text)) return [1, 2, 3, 4];
-  if (/afternoon|evening/.test(text)) return [5, 6, 7, 8];
-  if (/all day|whole day|full day|entire day/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 8];
+  if (/morning|subah/.test(text)) return [1, 2, 3, 4];
+  if (/afternoon|evening|dopahar|shaam|sham/.test(text)) return [5, 6, 7, 8];
+  if (/all day|whole day|full day|entire day|poora din/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 8];
   return null;
 }
 
@@ -69,6 +70,15 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   const mine = state.sessions
     .filter((s) => s.facultyId === user.id)
     .sort((a, b) => a.day - b.day || a.startPeriod - b.startPeriod);
+  const llmIntent = await proposeFacultyIntent(
+    raw,
+    mine.map((s) => ({
+      courseCode: state.labels.course(s.courseId),
+      day: s.day,
+      startPeriod: s.startPeriod,
+      duration: s.duration,
+    })),
+  );
   const groupsOf = (s: EngineSession) => s.groupIds.map(state.labels.group).join(" + ");
   const toItem = (s: EngineSession) => ({
     day: s.day,
@@ -81,16 +91,19 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
     kind: s.kind,
   });
   const days = parseDays(text);
-  const periods = parsePeriods(text);
+  const periods = llmIntent?.periods ?? parsePeriods(text);
 
   /* ---------------- Availability ---------------- */
-  if (/(unavailable|not available|can't make|cannot make|\baway\b|\bbusy\b|block (out|my|me))/.test(text)) {
-    if (!days.length) return { content: "Which day should I mark you unavailable? For example: “Mark me unavailable on Friday afternoon”.", payload: null };
+  if (llmIntent?.intent === "availability" || /(unavailable|not available|can't make|cannot make|\baway\b|\bbusy\b|block (out|my|me)|available nahi|chhutti|leave)/.test(text)) {
+    const requestedDays = llmIntent?.queryDay !== null && llmIntent?.queryDay !== undefined
+      ? [{ day: llmIntent.queryDay, index: 0 }]
+      : days;
+    if (!requestedDays.length) return { content: "Which day should I mark you unavailable? For example: “Mark me unavailable on Friday afternoon”.", payload: null };
     const wanted = periods ?? Array.from({ length: PERIOD_COUNT }, (_, i) => i + 1);
     const existing = new Set(state.blockRows.filter((b) => b.facultyId === user.id).map((b) => `${b.day}:${b.period}`));
     const blocks: { day: number; period: number }[] = [];
     const skipped: { day: number; period: number; courseCode: string }[] = [];
-    for (const { day } of days) {
+    for (const { day } of requestedDays) {
       for (const period of wanted) {
         const teaching = mine.find((s) => covers(s, day, period));
         if (teaching) skipped.push({ day, period, courseCode: state.labels.course(teaching.courseId) });
@@ -112,19 +125,20 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   }
 
   /* ---------------- Reschedule proposal ---------------- */
-  if (/(move|reschedule|shift|postpone|change)/.test(text) && /(class|lecture|lab|session|tutorial|[a-z]{2}\d{3})/.test(text)) {
+  if (llmIntent?.intent === "reschedule" || (/(move|reschedule|shift|postpone|change|badal|aage|peeche)/.test(text) && /(class|lecture|lab|session|tutorial|[a-z]{2}\d{3})/.test(text))) {
     if (!mine.length) return { content: "You have no sessions in the published timetable to move.", payload: null };
-    const codeMatch = text.match(/\b([a-z]{2}\d{3}[a-z]?)\b/);
+    const parsedCode = text.match(/\b([a-z]{2,5}\d{2,4}[a-z]?)\b/)?.[1] ?? null;
+    const requestedCode = llmIntent?.courseCode?.toLowerCase() ?? parsedCode;
     const toMatch = text.match(/\bto\s+(mon|tue|wed|thu|fri)/);
     const DAY_PREFIX: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4 };
-    const toDay = toMatch ? DAY_PREFIX[toMatch[1]] : undefined;
-    const fromDay = days.find((d) => d.day !== toDay)?.day;
+    const toDay = llmIntent?.targetDay ?? (toMatch ? DAY_PREFIX[toMatch[1]] : undefined);
+    const fromDay = llmIntent?.sourceDay ?? days.find((d) => d.day !== toDay)?.day;
     let candidates = mine;
-    if (codeMatch) candidates = candidates.filter((s) => state.labels.course(s.courseId).toLowerCase() === codeMatch[1]);
+    if (requestedCode) candidates = candidates.filter((s) => state.labels.course(s.courseId).toLowerCase() === requestedCode);
     if (fromDay !== undefined) candidates = candidates.filter((s) => s.day === fromDay);
     if (!candidates.length) {
       return {
-        content: `I couldn't find a matching session${codeMatch ? ` for ${codeMatch[1].toUpperCase()}` : ""}${fromDay !== undefined ? ` on ${DAYS[fromDay]}` : ""}. Your courses are: ${[...new Set(mine.map((s) => state.labels.course(s.courseId)))].join(", ")}.`,
+        content: `I couldn't find a matching session${requestedCode ? ` for ${requestedCode.toUpperCase()}` : ""}${fromDay !== undefined ? ` on ${DAYS[fromDay]}` : ""}. Your courses are: ${[...new Set(mine.map((s) => state.labels.course(s.courseId)))].join(", ")}.`,
         payload: null,
       };
     }
@@ -169,12 +183,12 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   }
 
   /* ---------------- Free rooms ---------------- */
-  if (/(free|available|empty|vacant|open)\b.*\b(room|venue|hall|lab|space)|\b(room|venue|hall|space)s?\b.*\b(free|available)/.test(text)) {
-    const day = days[0]?.day ?? (currentDayIndex() < 0 ? 0 : currentDayIndex());
+  if (llmIntent?.intent === "free_room" || /(free|available|empty|vacant|open|khali)\b.*\b(room|venue|hall|lab|space)|\b(room|venue|hall|space)s?\b.*\b(free|available|khali)/.test(text)) {
+    const day = llmIntent?.queryDay ?? days[0]?.day ?? (currentDayIndex() < 0 ? 0 : currentDayIndex());
     const wanted = periods ?? [1];
-    const capMatch = text.match(/(\d{2,3})\s*(students|people|seats|attendees|persons|learners)/);
-    const minCap = capMatch ? Number(capMatch[1]) : 1;
-    const wantsLab = /\blab/.test(text);
+    const capMatch = text.match(/(\d{2,4})\s*(students|people|seats|attendees|persons|learners|log)/);
+    const minCap = llmIntent?.minCapacity ?? (capMatch ? Number(capMatch[1]) : 1);
+    const wantsLab = llmIntent?.roomKind === "lab" || /\blab/.test(text);
     const free = state.roomRows
       .filter((r) => r.status === "active" && r.capacity >= minCap && (wantsLab ? r.type === "lab" : ["lecture", "seminar", "auditorium"].includes(r.type)))
       .filter((r) => !state.sessions.some((s) => s.roomId === r.id && wanted.some((p) => covers(s, day, p))))
@@ -192,7 +206,7 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   }
 
   /* ---------------- Workload ---------------- */
-  if (/(hour|workload|\bload\b|how much|how many classes)/.test(text)) {
+  if (llmIntent?.intent === "workload" || /(hour|workload|\bload\b|how much|how many classes|kitne (?:hour|class))/i.test(text)) {
     const periodsTotal = mine.reduce((n, s) => n + s.duration, 0);
     const perDay = DAYS.map((d, i) => ({ d, p: mine.filter((s) => s.day === i).reduce((n, s) => n + s.duration, 0) }));
     const busiest = [...perDay].sort((a, b) => b.p - a.p)[0];
@@ -203,7 +217,7 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   }
 
   /* ---------------- Requests ---------------- */
-  if (/(request|pending|approval|status)/.test(text)) {
+  if (llmIntent?.intent === "requests" || /(request|pending|approval|status)/.test(text)) {
     const rows = await db
       .select()
       .from(t.changeRequests)
@@ -222,7 +236,7 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   }
 
   /* ---------------- Conflicts ---------------- */
-  if (/(conflict|clash|issue|problem)/.test(text)) {
+  if (llmIntent?.intent === "conflicts" || /(conflict|clash|issue|problem|takra)/.test(text)) {
     const ids = new Set(mine.map((s) => s.id));
     const issues = validateSessions(state.sessions, state.ctx).filter((i) => i.sessionIds.some((id) => ids.has(id)));
     return {
@@ -234,7 +248,7 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   }
 
   /* ---------------- Schedule ---------------- */
-  if (/(schedule|timetable|class|teach|lecture|today|tomorrow|week|next)/.test(text) || days.length) {
+  if (llmIntent?.intent === "schedule" || /(schedule|timetable|class|teach|lecture|today|tomorrow|week|next|aaj|kal)/.test(text) || days.length) {
     if (/next class|next lecture|next session/.test(text)) {
       const now = new Date();
       const dayNow = currentDayIndex();
@@ -246,8 +260,12 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
       if (!upcoming) return { content: "You have no upcoming sessions.", payload: null };
       return { content: `Your next session is ${state.labels.course(upcoming.courseId)} on ${DAYS[upcoming.day]}.`, payload: { kind: "sessions", title: "Next session", items: [toItem(upcoming)] } };
     }
-    const weekend = currentDayIndex() < 0 && /today/.test(text);
-    const selected = days.length && !/week/.test(text) ? [...new Set(days.map((d) => d.day))] : [0, 1, 2, 3, 4];
+    const weekend = currentDayIndex() < 0 && /today|aaj/.test(text);
+    const selected = llmIntent?.queryDay !== null && llmIntent?.queryDay !== undefined
+      ? [llmIntent.queryDay]
+      : days.length && !/week/.test(text)
+        ? [...new Set(days.map((d) => d.day))]
+        : [0, 1, 2, 3, 4];
     const items = mine.filter((s) => selected.includes(s.day)).map(toItem);
     const label = selected.length === 5 ? "This week" : selected.map((d) => DAYS[d]).join(", ");
     return {

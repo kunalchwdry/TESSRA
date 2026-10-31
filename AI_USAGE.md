@@ -1,46 +1,67 @@
 # AI Usage Declaration — TESSRA
 
-Declared as required by the official problem statement (§6). Undeclared AI use costs marks; this file lists everything.
+This declaration is provided for the official problem statement §6.
 
-## 1. AI inside the product
+## 1. Runtime AI inside the product
 
-### What the product calls at runtime
-**By default: no external LLM API is called.** The in-app “AI Assistant” (`/faculty/assistant`, `src/lib/assistant.ts`) is a deterministic, rule-based natural-language layer written by the team:
+### Faculty schedule assistant
 
-- Intent parsing (schedule questions, free rooms, workload, availability, reschedule proposals, request status, conflicts).
-- Answers are computed from the live database, never generated text about imagined data.
-- Reschedule/availability outputs are **proposals**: the scheduling code re-validates them server-side (`checkSessionMove`), the faculty member confirms, and a coordinator approves before anything changes.
+The faculty page at `/faculty/assistant` has two layers:
 
-An optional LLM provider can be configured later via environment variables (see `.env.example`); no provider key ships with the repo and no code path requires one. The manual booking form and every workflow work with zero AI configuration (PS §6 requirement).
+1. **Optional LLM interpretation** (`src/lib/llm.ts`) converts a natural-language request into a tightly validated JSON intent: request type, course code, source/target day, periods, room kind and minimum capacity.
+2. **Deterministic scheduling code** (`src/lib/assistant.ts`, `src/lib/scheduler.ts`, `src/lib/engine.ts`) reads live database state, searches alternatives and validates every proposed placement.
 
-### What the LLM / assistant is NOT allowed to decide
-- Whether a timetable, booking, exam allocation or repair is **valid** — only deterministic code decides:
-  - `engine/core.py::check_assignment` + the model's hard constraints (OR-Tools CP-SAT),
-  - the organisers' `validator.py`, run unmodified on every official export,
-  - server-side re-validation of every demo-workspace change (`src/lib/engine.ts`).
-- Role/permission checks, priority order, category caps, cancellations — all deterministic code reading the official dataset.
-- No AI output is written to the database without passing those checks and an explicit human confirmation/approval.
+Supported optional providers:
 
-### Prompts
-Rule-based intent patterns live in `src/lib/assistant.ts` (SUGGESTED_PROMPTS + parser). There are no hidden LLM prompts because no LLM is called by default. If a provider is added, its prompts must be committed under `docs/prompts/` and this file updated.
+| Provider/API | Configuration | Purpose |
+|---|---|---|
+| OpenAI Chat Completions API or an OpenAI-compatible endpoint | `AI_PROVIDER=openai` or `openai-compatible`, `AI_API_KEY`, `AI_MODEL`, optional `AI_BASE_URL` | JSON intent extraction only |
+| Anthropic Messages API | `AI_PROVIDER=anthropic`, `AI_API_KEY`, `AI_MODEL` | JSON intent extraction only |
 
-## 2. AI tools used while building
+No key is committed. When these variables are absent, malformed, timed out or out of credit, the built-in deterministic English/Hinglish parser handles the request. The assistant and all manual workflows remain operational.
 
-| Tool | What it helped with |
-|---|---|
-| Claude (Anthropic) coding agent, in the Arena sandbox | Generated and refactored most of the codebase: Next.js UI and design system, Drizzle schema, demo scheduling engine, the CP-SAT engine in `engine/`, tests, and documentation. All output was executed and verified in the sandbox (type checks, builds, pytest, the official validator, headless-browser checks). |
+The runtime system prompt and schema are committed in:
 
-No other AI tools (image generators, UI generators, external code assistants) were used. No code was copied from other teams or pre-hackathon projects; the repository was built from an empty Next.js + Postgres starter during this event.
+- `src/lib/llm.ts` (`FACULTY_ASSISTANT_SYSTEM_PROMPT`)
+- `docs/prompts/faculty-assistant.md` (reviewable explanation and schema)
 
-## 3. Models / APIs summary
+### Plain-language venue intake
 
-| Where | Model/API | Purpose | Required? |
-|---|---|---|---|
-| Runtime | none (rule-based parser) | NL assistant over live data | no external service |
-| Build time | Claude coding agent | code generation & review | declared above |
+The English/Hinglish venue-request parser (`src/lib/booking-parser.ts`) is deterministic and does not call an external model. It extracts an editable draft, makes assumptions visible, asks for missing essentials, checks role ceilings, and proposes a compatible venue. Submission still runs the ordinary server-side booking validator.
 
-## 4. Validation boundary (architecture)
+## 2. What an LLM is not allowed to decide
 
-User request → parser/AI extraction → structured proposal → **deterministic validation** → user authorization → backend action → audit log.
+An LLM cannot decide or apply:
 
-The official pipeline never involves an LLM at all: dataset → CP-SAT solve → official validator → Admin review → export.
+- timetable, exam, room or booking validity;
+- room/faculty/group clashes, capacity, accessibility, breaks, fixed slots or availability;
+- event category ceilings, priority order, permissions, approval or cancellation;
+- any database write.
+
+LLM output is treated as untrusted input. Invalid JSON and out-of-range fields are discarded. A schedule target is checked by deterministic code before it is shown, checked again when submitted, and requires coordinator approval before the published timetable changes.
+
+The official CIT pipeline does not use an LLM: dataset → OR-Tools CP-SAT → deterministic checker → official validator → administrator approval/export.
+
+## 3. AI used while building
+
+An AI coding agent was used during the hackathon to help draft and review the Next.js UI, database schema, CP-SAT engine, tests and documentation. The orchestration environment did not expose a stable underlying model identifier, so none is asserted here. Generated work was reviewed and executed with TypeScript checks, production builds, Python tests and the unmodified official validator.
+
+No image-generation, no-code UI generation, or copied project/template code was used.
+
+## 4. Failure boundary
+
+```text
+Natural-language request
+        ↓
+optional LLM JSON interpretation (or deterministic fallback)
+        ↓
+strict schema/range sanitisation
+        ↓
+deterministic search + hard-constraint validation
+        ↓
+human confirmation / authorized approval
+        ↓
+server-side revalidation + audited database change
+```
+
+The manual booking form never depends on an LLM and remains available if every AI provider is disabled.

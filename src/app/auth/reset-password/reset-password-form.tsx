@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui";
 import { buttonClasses } from "@/components/ui";
@@ -10,12 +10,6 @@ export default function ResetPasswordForm({ token }: { token: string }) {
   const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<{ kind: "info" | "success" | "error"; text: string } | null>(null);
-
-  useEffect(() => {
-    if (!token) {
-      setMessage({ kind: "error", text: "No reset token provided." });
-    }
-  }, [token]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

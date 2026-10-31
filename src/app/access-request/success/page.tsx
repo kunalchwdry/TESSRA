@@ -1,5 +1,6 @@
 import { CheckCircle2, Mail } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { PRODUCT } from "@/lib/constants";
 import { buttonClasses } from "@/components/ui";
 
@@ -31,13 +32,13 @@ export default function AccessRequestSuccessPage() {
           </div>
 
           <div className="mt-8 flex gap-3">
-            <a href="/login" className={buttonClasses("primary", "lg")}>
+            <Link href="/login" className={buttonClasses("primary", "lg")}>
               <Mail className="size-4" aria-hidden />
               Sign in
-            </a>
-            <a href="/" className={buttonClasses("secondary", "lg")}>
+            </Link>
+            <Link href="/" className={buttonClasses("secondary", "lg")}>
               Homepage
-            </a>
+            </Link>
           </div>
         </div>
       </div>

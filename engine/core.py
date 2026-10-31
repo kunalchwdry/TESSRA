@@ -108,8 +108,8 @@ def feasible_rooms(ctx: Context, s: dict) -> list[str]:
             continue
         if s.get("needs_accessible") and not r["accessible"]:
             continue
-        if s["kind"] not in r.get("allowed_uses", []):
-            continue
+        # The official H6 validator checks the declared room type for regular
+        # sessions. `allowed_uses` is enforced separately for bookings/exams.
         out.append(r["id"])
     return sorted(out, key=lambda rid: ctx.rooms[rid]["capacity"])
 
@@ -166,7 +166,7 @@ class SolveResult:
 
 
 def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float = 60.0,
-                    workers: int = 8, move_penalty: int = 1000) -> SolveResult:
+                    workers: int = 2, move_penalty: int = 1000) -> SolveResult:
     """Hard constraints are model constraints; soft S1–S6 form the objective with
     the official weights. With a baseline, every changed placement costs
     `move_penalty` so repairs move as few sessions as possible."""
@@ -236,14 +236,12 @@ def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float 
             m.AddAtMostOne(vs)                                                  # H2
 
     # basket sync: every session of a basket slot at the same day+start (H11)
-    basket_rep: dict[str, str] = {}
     basket_time: dict[str, dict[tuple[str, int], Any]] = {}
     for bslot, members in baskets.items():
         durations = {s["duration"] for s in members}
         if len(durations) != 1:
             return SolveResult("infeasible", {}, None, time.time() - t0,
                                [f"Basket {bslot}: members have different durations; official semantics require equal timing"])
-        basket_rep[bslot] = members[0]["id"]
         basket_time[bslot] = {}
         cand = set()
         for s in members:
@@ -255,14 +253,16 @@ def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float 
                 m.Add(sum(slot_sum[s["id"]].get(ds, [])) == t)
         m.AddExactlyOne(basket_time[bslot].values())
 
-    # group occupancy (H3) — basket represented once (students attend only one)
+    # Group occupancy (H3). A basket contributes once to every group appearing
+    # in any member; the shared basket-time variable mirrors the validator's set
+    # semantics even if member group lists are not identical.
     grp_occ_vars: dict[tuple[str, str, int], Any] = {}
     grp_occ_terms: dict[tuple[str, str, int], list] = defaultdict(list)
     grp_day_terms: dict[tuple[str, str], list] = defaultdict(list)
     day_of: dict[str, dict[str, list]] = defaultdict(lambda: defaultdict(list))
     for s in ctx.sessions.values():
         sid = s["id"]
-        if s.get("basket_slot") and basket_rep[s["basket_slot"]] != sid:
+        if s.get("basket_slot"):
             continue
         for (day, st), vs in slot_sum[sid].items():
             day_of[sid][day].extend(vs)
@@ -271,8 +271,20 @@ def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float 
                     grp_occ_terms[(g, day, p)].extend(vs)
             for g in s["groups"]:
                 grp_day_terms[(g, day)].append((s["duration"], vs))
+
+    for bslot, members in baskets.items():
+        duration = members[0]["duration"]
+        groups = sorted({g for s in members for g in s["groups"]})
+        for (day, st), basket_var in basket_time[bslot].items():
+            for p in block(st, duration):
+                for g in groups:
+                    grp_occ_terms[(g, day, p)].append(basket_var)
+            for g in groups:
+                grp_day_terms[(g, day)].append((duration, [basket_var]))
+
     for key, vs in grp_occ_terms.items():
         o = m.NewBoolVar(f"occ|{key[0]}|{key[1]}|{key[2]}")
+        # Equality to a Boolean both defines occupancy and enforces H3.
         m.Add(sum(vs) == o)
         grp_occ_vars[key] = o
 
@@ -288,36 +300,31 @@ def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float 
         m.Add(over >= hours - 6)
         obj_terms.append(3 * over)
 
-    # S2: gaps between a group's classes on a day (lunch is not a period → automatic)
+    # S2: one point for every unoccupied teaching period that has a class
+    # before and after it on the same day. Lunch is between P5/P6 and therefore
+    # is not represented as a period, exactly as in validator.py.
     for g in ctx.groups:
         for day in DAYS:
-            occ = {p: grp_occ_vars[(g, day, p)] for p in range(1, LAST_TEACHING + 1) if (g, day, p) in grp_occ_vars}
+            occ = {p: grp_occ_vars[(g, day, p)] for p in range(1, LAST_TEACHING + 1)
+                   if (g, day, p) in grp_occ_vars}
             if len(occ) < 2:
                 continue
-            before, after = {}, {}
-            for p in range(2, LAST_TEACHING + 1):
-                lows = [occ[q] for q in occ if q < p]
-                if not lows:
-                    continue
-                b = m.NewBoolVar(f"bef|{g}|{day}|{p}")
-                for q in lows:
-                    m.Add(b >= q)
-                m.Add(b <= sum(lows))
-                before[p] = b
-            for p in range(1, LAST_TEACHING):
-                highs = [occ[q] for q in occ if q > p]
-                if not highs:
-                    continue
-                a = m.NewBoolVar(f"aft|{g}|{day}|{p}")
-                for q in highs:
-                    m.Add(a >= q)
-                m.Add(a <= sum(highs))
-                after[p] = a
             for p in range(2, LAST_TEACHING):
-                if p in before and p in after and p in occ:
-                    gap = m.NewBoolVar(f"gap|{g}|{day}|{p}")
-                    m.Add(gap >= before[p] + after[p] - occ[p] - 1)
-                    obj_terms.append(gap)
+                lows = [var for q, var in occ.items() if q < p]
+                highs = [var for q, var in occ.items() if q > p]
+                if not lows or not highs:
+                    continue
+                before = m.NewBoolVar(f"bef|{g}|{day}|{p}")
+                after = m.NewBoolVar(f"aft|{g}|{day}|{p}")
+                m.AddMaxEquality(before, lows)
+                m.AddMaxEquality(after, highs)
+                here = occ.get(p, 0)
+                gap = m.NewBoolVar(f"gap|{g}|{day}|{p}")
+                m.Add(gap <= before)
+                m.Add(gap <= after)
+                m.Add(gap + here <= 1)
+                m.Add(gap >= before + after - here - 1)
+                obj_terms.append(gap)
 
     # S4: same course twice in a day for a group (lectures); baskets per course/day
     course_day: dict[tuple[str, str, str], list] = defaultdict(list)
@@ -362,7 +369,7 @@ def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(time_limit)
     solver.parameters.num_search_workers = workers
-    solver.parameters.random_seed = 42  # reproducible solutions across runs
+    solver.parameters.random_seed = 42  # stable tie-breaking; parallel search may still vary
     status = solver.Solve(m)
     name = {cp_model.OPTIMAL: "optimal", cp_model.FEASIBLE: "feasible",
             cp_model.INFEASIBLE: "infeasible", cp_model.MODEL_INVALID: "unknown"}.get(status, "unknown")
@@ -416,8 +423,6 @@ def check_assignment(data: dict, assign: dict) -> list[str]:
             V.append(f"H6 {sid} room type")
         if s.get("needs_accessible") and not r["accessible"]:
             V.append(f"H10 {sid} accessibility")
-        if s["kind"] not in r.get("allowed_uses", []):
-            V.append(f"H6 {sid} room use not allowed")
         for p in per:
             room_occ[(rid, day, p)].append(sid)
             fac_occ[(s["faculty_id"], day, p)].append(sid)

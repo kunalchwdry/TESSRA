@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -8,7 +8,7 @@ import * as t from "@/db/schema";
 import { respond } from "./assistant";
 import { endSession, requireRole, requireUser } from "./auth";
 import { hashPassword } from "./password";
-import { BOOKING_CATEGORIES, DAY_SHORT, ROOM_FEATURES, type ChangeType, type Priority, type RoomStatus, type RoomType, type SessionKind } from "./constants";
+import { BOOKING_CATEGORIES, BOOKING_NEEDS, DAY_SHORT, ROOM_FEATURES, type ChangeType, type Priority, type RoomStatus, type RoomType, type SessionKind } from "./constants";
 import {
   applyDisruptionPlan,
   audit,
@@ -302,12 +302,19 @@ export async function createBookingAction(_prev: ActionState, fd: FormData): Pro
   const startTime = str(fd, "startTime");
   const endTime = str(fd, "endTime");
   const attendees = num(fd, "attendees");
-  const priority = (str(fd, "priority") || "normal") as Priority;
-  const needs = fd.getAll("needs").map(String).slice(0, 10);
+  // Priority is derived from the authenticated role, never from natural-language
+  // claims or a tampered form field. This prevents category/priority abuse.
+  const priority: Priority = user.role === "coordinator" ? "high" : "normal";
+  const needs = fd.getAll("needs").map(String).filter((need) => BOOKING_NEEDS.includes(need)).slice(0, 10);
   const errors: Record<string, string> = {};
   const lead = user.role === "club" ? settings?.bookingLeadDays ?? 2 : 0;
   if (title.length < 3) errors.title = "Give the event a clear title";
-  if (!BOOKING_CATEGORIES.some((c) => c.value === category)) errors.category = "Select a category";
+  const roleCategories = user.role === "club"
+    ? ["club_event", "workshop", "seminar", "meeting", "cultural", "sports"]
+    : ["department_event", "workshop", "seminar", "meeting"];
+  if (!BOOKING_CATEGORIES.some((c) => c.value === category) || !roleCategories.includes(category)) {
+    errors.category = "This category is not available to your role";
+  }
   if (!roomId) errors.roomId = "Select a venue";
   if (!isIsoDate(date)) errors.date = "Choose a date";
   else if (daysUntil(date) < lead) errors.date = lead ? `Requests need at least ${lead} day(s) notice` : "Date cannot be in the past";
@@ -320,12 +327,22 @@ export async function createBookingAction(_prev: ActionState, fd: FormData): Pro
     else if (settings && mins > settings.maxBookingHours * 60) errors.endTime = `Bookings are limited to ${settings.maxBookingHours} hours`;
   }
   if (!attendees || attendees < 1) errors.attendees = "Enter expected attendance";
-  if (!["low", "normal", "high", "critical"].includes(priority)) errors.priority = "Select a priority";
   if (Object.keys(errors).length) return fail("Please fix the highlighted fields.", errors);
 
   const [room] = await db.select().from(t.rooms).where(eq(t.rooms.id, roomId as number));
   if (!room) return fail("Venue not found.", { roomId: "Venue not found" });
-  if (user.role === "club" && !room.bookable) return fail("This venue is not open to club bookings.", { roomId: "Not bookable by clubs" });
+  if (user.role === "club" && !room.bookable && room.type !== "lab") return fail("This venue is not open to club bookings.", { roomId: "Not bookable by clubs" });
+  const features = new Set(room.features.map((feature) => feature.toLowerCase()));
+  const unsupported = needs.filter((need) => {
+    if (need === "Accessibility") return !room.accessible;
+    if (need === "Microphones") return !features.has("audio system");
+    if (need === "Wi-Fi access") return !features.has("wi-fi");
+    if (need === "Recording") return !features.has("recording") && !features.has("lecture capture");
+    return !features.has(need.toLowerCase());
+  });
+  if (unsupported.length) {
+    return fail(`${room.code} does not provide: ${unsupported.join(", ")}.`, { roomId: "Choose a venue with all requested facilities" });
+  }
   const analyzer = await buildBookingAnalyzer();
   const probe = { roomId: room.id, date, startTime, endTime, attendees: attendees as number };
   const blocking = analyzer.check(probe).filter((c) => c.severity === "error");
@@ -1025,6 +1042,104 @@ export async function rejectAccessRequestAction(_prev: ActionState, fd: FormData
   await audit(user.id, "access_request.rejected", "access_request", id, `Rejected access request for ${req.name} (${req.email})`);
   refresh();
   return ok(`Rejected — ${req.name} has been notified.`);
+}
+
+/* ============================ Reset demo data =========================== */
+export async function resetDemoDataAction(_prev: ActionState, _fd: FormData): Promise<ActionState> {
+  const user = await requireRole("admin");
+
+  /*
+   * Keep identity and reference data (accounts, departments, clubs, rooms,
+   * groups, courses, offerings and exams), plus auth sessions so the judge who
+   * pressed the button is not signed out. Clear mutable demo activity and reset
+   * policy/availability/room state before producing a fresh timetable.
+   *
+   * The old published timetable remains available until the replacement has
+   * been generated completely. If generation fails, judges are never left with
+   * an empty application.
+   */
+  await db.transaction(async (tx) => {
+    await tx.delete(t.assistantMessages);
+    await tx.delete(t.notifications);
+    await tx.delete(t.disruptions);
+    await tx.delete(t.changeRequests);
+    await tx.delete(t.bookings);
+    await tx.delete(t.accessRequests);
+    await tx.delete(t.passwordResetTokens);
+    await tx.delete(t.officialRuns);
+    await tx.delete(t.assignments);
+    await tx.delete(t.courseResources);
+    await tx.delete(t.syllabusUnits);
+    await tx.delete(t.auditLogs);
+    await tx.delete(t.availabilityBlocks);
+
+    await tx
+      .update(t.settings)
+      .set({
+        institutionName: "Westbrook Institute of Technology",
+        academicTerm: "Autumn Term 2026",
+        bookingLeadDays: 2,
+        maxBookingHours: 6,
+        clubApprovalRequired: true,
+        allowWeekendBookings: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(t.settings.id, 1));
+    await tx.update(t.rooms).set({ status: "active", maintenanceNote: null });
+    await tx.update(t.scheduledSessions).set({ isFixed: false });
+
+    const faculty = await tx
+      .select({ id: t.users.id, email: t.users.email })
+      .from(t.users)
+      .where(eq(t.users.role, "faculty"));
+    const byEmail = new Map(faculty.map((f) => [f.email, f.id]));
+    const baseline = [
+      ["ananya.rao@westbrook.edu", 4, [7, 8], "Research group meeting"],
+      ["rahul.verma@westbrook.edu", 0, [1, 2], "Academic council"],
+      ["suresh.pillai@westbrook.edu", 2, [5, 6, 7, 8], "External examiner duty"],
+      ["neha.kulkarni@westbrook.edu", 3, [1, 2], "PhD coursework"],
+      ["laura.mendes@westbrook.edu", 1, [7, 8], "Industry advisory board"],
+    ] as const;
+    const blocks: (typeof t.availabilityBlocks.$inferInsert)[] = [];
+    for (const [email, day, periods, reason] of baseline) {
+      const facultyId = byEmail.get(email);
+      if (!facultyId) continue;
+      for (const period of periods) blocks.push({ facultyId, day, period, reason });
+    }
+    if (blocks.length) await tx.insert(t.availabilityBlocks).values(blocks);
+  });
+
+  const { version, stats } = await generateVersion(user.id, "Clean demo reset — freshly generated timetable");
+  if (stats.placedUnits !== stats.requiredUnits || stats.placedPeriods !== stats.requiredPeriods) {
+    await db.delete(t.scheduleVersions).where(eq(t.scheduleVersions.id, version.id));
+    return fail(
+      `Reset stopped safely: the replacement timetable placed ${stats.placedUnits}/${stats.requiredUnits} sessions. The previous published timetable is still active.`,
+    );
+  }
+
+  const sessions = await db
+    .select({ id: t.scheduledSessions.id })
+    .from(t.scheduledSessions)
+    .where(eq(t.scheduledSessions.versionId, version.id))
+    .limit(2);
+  if (sessions.length) {
+    await db
+      .update(t.scheduledSessions)
+      .set({ isFixed: true })
+      .where(inArray(t.scheduledSessions.id, sessions.map((s) => s.id)));
+  }
+
+  await publishVersion(version.id);
+  await db.delete(t.scheduleVersions).where(ne(t.scheduleVersions.id, version.id));
+  await audit(
+    user.id,
+    "demo_data.reset",
+    "system",
+    version.id,
+    `Reset mutable demo data and generated ${stats.placedUnits}/${stats.requiredUnits} sessions`,
+  );
+  refresh();
+  return ok(`Clean demo restored. Fresh timetable generated with all ${stats.requiredUnits} sessions.`);
 }
 
 /* ============================ Password reset =========================== */

@@ -136,6 +136,61 @@ def test_h14_fixed_slot_stays():
     assert solve(data)["S1"][:2] == ("THU", 6)
 
 
+def test_h1_checker_rejects_missing_and_unknown_sessions():
+    data = dataset(sessions=[sess("S1")])
+    assert any(v.startswith("H1 S1 not scheduled") for v in check_assignment(data, {}))
+    violations = check_assignment(data, {"S1": ("MON", 1, "R1"), "BOGUS": ("MON", 2, "R1")})
+    assert any(v.startswith("H1 BOGUS invalid placement") for v in violations)
+
+
+def objective(data):
+    result = solve_timetable(data, time_limit=10, workers=1)
+    assert result.status == "optimal", result.reasons
+    assert not check_assignment(data, result.assignment)
+    return int(result.objective)
+
+
+def test_soft_s1_faculty_avoid_weight_is_two_per_period():
+    data = dataset(
+        faculty=[fac("F1", prefs=[{"type": "avoid", "days": ["MON"], "periods": [1]}])],
+        sessions=[sess("S1", fixed={"day": "MON", "start_period": 1})],
+    )
+    assert objective(data) == 2
+
+
+def test_soft_s2_counts_an_actual_empty_period_between_classes():
+    data = dataset(
+        faculty=[fac("F1"), fac("F2")],
+        sessions=[sess("C1-L1", fixed={"day": "MON", "start_period": 1}),
+                  sess("C2-L1", fid="F2", fixed={"day": "MON", "start_period": 3})],
+    )
+    assert objective(data) == 1
+
+
+def test_soft_s3_group_over_six_hours_weight_is_three_per_extra_hour():
+    faculty = [fac(f"F{i}") for i in range(1, 8)]
+    sessions = [sess(f"C{i}-L1", fid=f"F{i}", fixed={"day": "MON", "start_period": i})
+                for i in range(1, 8)]
+    assert objective(dataset(faculty=faculty, sessions=sessions)) == 3
+
+
+def test_soft_s4_same_course_twice_weight_is_three():
+    data = dataset(
+        faculty=[fac("F1"), fac("F2")],
+        sessions=[sess("X-L1", course="X", fixed={"day": "MON", "start_period": 1}),
+                  sess("X-L2", fid="F2", course="X", fixed={"day": "MON", "start_period": 2})],
+    )
+    assert objective(data) == 3
+
+
+def test_soft_s5_under_40_percent_and_s6_p9_each_weight_one():
+    data = dataset(
+        rooms=[room("R1", cap=100)],
+        sessions=[sess("S1", size=30, fixed={"day": "MON", "start_period": 9})],
+    )
+    assert objective(data) == 2
+
+
 def test_infeasible_is_explained_not_faked():
     r = solve_timetable(dataset(sessions=[sess("S1", size=500)]), time_limit=5)
     assert r.status == "infeasible" and r.assignment == {}
@@ -327,6 +382,8 @@ def test_exam_room_picker_fewest_rooms_and_preserves_big_hall():
 def test_solver_deterministic_with_seed():
     data = dataset(faculty=[fac("F1"), fac("F2")],
                    sessions=[sess(f"S{i}", fid="F1" if i % 2 else "F2") for i in range(8)])
-    a1 = solve_timetable(data, time_limit=5, workers=4).assignment
-    a2 = solve_timetable(data, time_limit=5, workers=4).assignment
+    # CP-SAT's parallel portfolio can legitimately return different equal-cost
+    # optima; single-worker search is deterministic with the fixed seed.
+    a1 = solve_timetable(data, time_limit=5, workers=1).assignment
+    a2 = solve_timetable(data, time_limit=5, workers=1).assignment
     assert a1 == a2

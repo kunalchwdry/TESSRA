@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isConfigured } from "@/lib/supabase/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   // If Supabase is not configured, skip Supabase middleware entirely.
   // The app uses its own session/auth layer via Drizzle + PostgreSQL.
   if (!isConfigured) {

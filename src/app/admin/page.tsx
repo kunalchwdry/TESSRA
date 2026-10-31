@@ -2,6 +2,7 @@ import { ArrowRight, Building, CalendarClock, CalendarDays, Gauge, GraduationCap
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActivityFeed, UpcomingBookingRow } from "@/components/domain";
+import { ResetDemoDataButton } from "@/components/reset-demo-data";
 import { Avatar, Badge, BarList, ButtonLink, Card, CardHeader, EmptyState, PageHeader, PriorityBadge, ProgressBar, StatCard } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { DAYS } from "@/lib/constants";
@@ -73,6 +74,7 @@ export default async function AdminOverviewPage() {
         description="Scheduling health, pending decisions and upcoming campus activity — everything that needs your attention today."
         actions={
           <>
+            <ResetDemoDataButton compact />
             <ButtonLink href="/admin/scheduling" variant="secondary">
               <CalendarClock aria-hidden /> Smart Scheduling
             </ButtonLink>

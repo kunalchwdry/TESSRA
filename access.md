@@ -9,7 +9,6 @@
 | Service | URL |
 |---------|-----|
 | **Production (Vercel)** | https://tessra-five.vercel.app |
-| **Demo App (Scheduling preview)** | https://3000-inghsegmc8x5dhvl7czr0.e2b.app/admin/scheduling?version=5&view=group&id=4 |
 | **GitHub Repository** | https://github.com/kunalchwdry/TESSRA.git |
 
 ---
@@ -112,8 +111,9 @@ Schema: 26 tables (see `src/db/schema.ts` and `drizzle/0000_supabase_schema.sql`
 git clone https://github.com/kunalchwdry/TESSRA.git
 cd TESSRA
 
-# Install
-npm install
+# Install (Node.js 22+)
+npm ci
+python3 -m pip install -r engine/requirements.txt pytest
 
 # Environment (see .env.example)
 cp .env.example .env
