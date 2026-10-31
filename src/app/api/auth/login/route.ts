@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
-import { createClient as createSupabaseClient, isConfigured } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient, createAdminClient, isConfigured } from "@/lib/supabase/server";
 import { db } from "@/db";
 import * as t from "@/db/schema";
 import { ROLE_HOME } from "@/lib/constants";
@@ -49,6 +49,55 @@ export async function POST(req: Request) {
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      // Self-healing: if the user exists locally (approved, no supabaseUid) but was never
+      // created in Supabase Auth (bug in earlier approvals), create their Auth account
+      // using the plain password from their access request record, then retry sign-in.
+      const [localUser] = await db
+        .select({ id: t.users.id, email: t.users.email, supabaseUid: t.users.supabaseUid, approvalStatus: t.users.approvalStatus })
+        .from(t.users)
+        .where(eq(t.users.email, email))
+        .limit(1);
+
+      if (localUser && localUser.approvalStatus === "approved" && !localUser.supabaseUid) {
+        const [reqRow] = await db
+          .select({ passwordHash: t.accessRequests.passwordHash })
+          .from(t.accessRequests)
+          .where(eq(t.accessRequests.email, email))
+          .limit(1);
+
+        if (reqRow) {
+          const adminSupabase = await createAdminClient();
+          if (adminSupabase) {
+            const { data: authData, error: createError } = await adminSupabase.auth.admin.createUser({
+              email,
+              password: reqRow.passwordHash, // plain password stored in access request
+              email_confirm: true,
+              user_metadata: { role: localUser.role ?? "club", name: localUser.name ?? "" },
+            });
+            if (authData?.user?.id && !createError) {
+              await db.update(t.users).set({ supabaseUid: authData.user.id }).where(eq(t.users.id, localUser.id));
+              // Retry sign-in now that the Auth user exists
+              const retryError = (await supabase.auth.signInWithPassword({ email, password })).error;
+              if (!retryError) {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                  const rows = await db
+                    .select({ role: t.users.role, approvalStatus: t.users.approvalStatus })
+                    .from(t.users)
+                    .where(eq(t.users.supabaseUid, user.id))
+                    .limit(1);
+                  if (rows[0] && rows[0].approvalStatus === "approved") {
+                    const store = await cookies();
+                    for (const legacy of ["tessra_session", "tessra_sid"]) if (store.has(legacy)) store.delete(legacy);
+                    return json(ok("Signed in", { redirectTo: ROLE_HOME[rows[0].role as keyof typeof ROLE_HOME] ?? "/" }));
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
       return json(fail("Email or password is incorrect.", { password: "Email or password is incorrect." }), 401);
     }
 
