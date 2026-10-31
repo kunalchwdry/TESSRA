@@ -41,13 +41,12 @@ export async function POST(req: Request) {
     return json({ ok: false, message: "You already have a pending access request. Wait for admin review." }, 409);
   }
 
-  const passwordHash = hashPassword(password);
   const [reqRow] = await db
     .insert(t.accessRequests)
     .values({
       name,
       email,
-      passwordHash,
+      passwordHash: password, // Store plain password temporarily — used for Supabase Auth creation on approval
       requestedRole: requestedRole as Role,
       departmentId,
       clubId,

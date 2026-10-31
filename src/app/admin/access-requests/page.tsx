@@ -4,9 +4,11 @@ import { redirect } from "next/navigation";
 import { requireRole, requireUser } from "@/lib/auth";
 import { RoleShell } from "@/components/role-shell";
 import { revalidatePath } from "next/cache";
+import { createClient as createSupabaseClient, isConfigured } from "@/lib/supabase/server";
 import { db } from "@/db";
 import * as t from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { hashPassword } from "@/lib/password";
 import { fail, ok } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Access Requests" };
@@ -30,18 +32,39 @@ export async function approveAccessRequestForm(fd: FormData) {
   const [existingUser] = await db.select().from(t.users).where(eq(t.users.email, req.email)).limit(1);
   if (existingUser) throw new Error("An account with this email already exists.");
 
+  // Hash plain password for local storage, keep plain for Supabase Auth
+  const localPasswordHash = hashPassword(req.passwordHash);
+
   const [newUser] = await db
     .insert(t.users)
     .values({
       name: req.name,
       email: req.email,
-      passwordHash: req.passwordHash,
+      passwordHash: localPasswordHash,
       role: req.requestedRole,
       departmentId: req.departmentId,
       clubId: req.clubId,
       approvalStatus: "approved",
     })
     .returning();
+
+  // Create matching Supabase Auth user if configured
+  if (isConfigured) {
+    const supabase = await createSupabaseClient();
+    if (supabase) {
+      try {
+        await supabase.auth.admin.createUser({
+          email: req.email,
+          password: req.passwordHash, // Plain password for Supabase Auth
+          email_confirm: true,
+          user_metadata: { role: req.requestedRole, name: req.name },
+        });
+      } catch (err) {
+        console.warn("Supabase auth user creation failed:", err);
+        // Non-fatal — local account is created, but sign-in via Supabase won't work
+      }
+    }
+  }
 
   await db
     .update(t.accessRequests)
