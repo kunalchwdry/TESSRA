@@ -1,0 +1,104 @@
+# TESSRA — Testing
+
+All commands below were executed in the sandbox; headline results are recorded. Re-run them any time.
+
+## 1. Scheduling engine (pytest)
+```
+python3 -m pytest engine/tests -q
+→ 23 passed
+```
+Covers: H2/H3/H4 clashes, H5 capacity, H6 type/allowed_uses, H7 faculty unavailability, H8 room unavailability, H9 lab starts + lunch, H10 accessibility, H11 baskets (same time, different rooms, no group clash inside basket), H12 daily limit, H14 fixed slots, infeasibility explained (never faked), booking priority caps + tiebreak, cancellations, capacity rejection reasons, mandatory groups, exam half-capacity/multi-room/group clash, disruption semantics, and the **official end-to-end test** (solve → official validator → 0 hard; repair → 0 hard, ≤20 moved).
+
+## 2. Official validator (the organisers' file, unmodified)
+```
+python3 engine/solve.py --data official/starterpack/CrunchWeek_StarterPack/data/cit_public.json \
+    --out exports/schedule.json --time-limit 90
+python3 official/starterpack/CrunchWeek_StarterPack/validator.py \
+    --data official/.../cit_public.json --schedule exports/schedule.json --json exports/report.json
+→ Hard violations: 0  {}
+→ Soft penalty: 3  {S1:0, S2:0, S3:0, S4:3, S5:0, S6:0}   (solver status: optimal)
+→ Bookings: score 65.5 / 70 | approved 21, alternatives 2, rejected 2, overrides 0, priority inversions 0
+  (score varies 62–65.5 with the optimal timetable chosen; inversions always 0)
+→ Exam soft penalty: 0
+
+python3 engine/solve.py --data ... --out exports/schedule_after.json \
+    --disruption official/.../examples/sample_disruption.json --baseline exports/schedule.json
+python3 official/.../validator.py --data ... --schedule exports/schedule_after.json \
+    --disruption ... --baseline exports/schedule.json --json exports/report_after.json
+→ Hard violations: 0  {}
+→ Soft penalty: 3 (optimal) · Stability: 10 sessions moved (5 changed time, 5 room only)
+  Repair objective = 3.0 ⇒ zero discretionary moves; all 10 are forced by the change file
+```
+Rejections are legitimate: BR-04 is on the official cancellations list; BR-09 needs 1,200 seats and the largest matching venue holds 800.
+
+## 3. Web application
+```
+npx next typegen            → types generated
+npm exec tsc -- --noEmit    → 0 errors
+npm run build               → all routes compiled (App Router)
+npx eslint .                → 0 problems
+build_and_start (platform)  → /api/health {"ok":true}
+```
+
+## 4. Runtime & security checks (executed against the live preview)
+- Every route of all four roles → HTTP 200 with real data; anon → /login; wrong role → own workspace; exports 403 for unauthorized roles.
+- Sign-in browser matrix (headless Chromium, Firefox, WebKit): normal tab ✅, embedded preview ✅ (partitioned cookies), strict-privacy/blocked contexts → direct-link panel with copyable address ✅, sandboxed panel → explained ✅. Sign-out and session invalidation verified.
+- Login route: cross-site POST → 403; wrong password → 401 with field error.
+- Official page: run history, validator report rendering, export downloads.
+
+## 5. Not yet covered (honest)
+- No frontend unit-test runner (components verified via typecheck + headless-browser flows instead).
+- Supabase RLS policy tests — pending the Supabase project.
+- Load testing of the engine service under concurrent jobs.
+
+## 6. Constraint audit & fixes (this review round)
+
+Bugs found in `engine/core.py` by code audit, fixed in place (no architecture change), each followed by an official-validator run:
+
+| # | Bug | Effect | Fix | Regression test |
+|---|---|---|---|---|
+| 1 | Placed bookings were injected into the session map as synthetic `__booking__` entries | `check_assignment` flagged them as unknown sessions → institute-event displacement silently impossible after the first booking; placed bookings could even be selected as "classes to displace" | Bookings tracked in a separate `placed` list, overlaid on occupancy maps; session world stays pure | `test_institute_override_works_after_earlier_booking_placed` |
+| 2 | Mandatory groups not re-checked after displacement | Moving the room conflict alone could still clash with the event's mandatory group (H13) | Final `slot_free` verification of room **and** mandatory groups on the post-move week | `test_override_refused_when_mandatory_group_still_busy` |
+| 3 | Displacement destination search accepted slots that still overlapped the event being placed | Search picked a "valid timetable" slot that kept the event room busy → whole attempt rejected | Destinations that keep the event room (or its mandatory groups) busy during the event are excluded up front | same as #1 (escape-slot assertion) |
+| 4 | Exam room picker filled ascending | Up to ~10 tiny rooms for a 360-seat exam; wasted capacity risked E1 on tighter inputs | `pick_exam_rooms`: exact single fit first, descending coverage, largest hall preserved when the rest suffice (now ≤5 rooms/exam, 63 total room-uses) | `test_exam_room_picker_fewest_rooms_and_preserves_big_hall` |
+| 5 | No solver seed | Booking score varied run-to-run without reproducibility | `random_seed = 42` (optimal timetables may still differ across worker interleavings; hard guarantees unchanged) | `test_solver_deterministic_with_seed` |
+
+Also verified by design + tests: fixed-slot classes are never displaced (H14), basket sessions are never moved alone (H11), clubs capped to club_event can never displace classes (`test_club_cannot_displace_classes`), P10–P13 remain event-only (solver bound P1–P9), exam capacity halved.
+
+Post-fix official validator (both exports, plus independent re-run on the files downloaded through the live UI):
+**0 hard violations · soft 3 (provably optimal) · bookings 65.5/70 · 0 priority inversions · repair 10 forced moves.**
+
+## 7. Manual scheduling & extra-class approval (runtime tests)
+
+Executed against the live preview through the real Server Actions:
+
+| Step | Result |
+|---|---|
+| Admin adds CS302 for Dr. Rao, auto room | ✅ added Mon P1 · A-202, teacher notified, audited |
+| Admin adds at a slot where Rao already teaches | ✅ rejected: "Dr. Ananya Rao double-booked on Mon P3 (CS201L & CS302)" |
+| Admin moves the new session | ✅ moved Tue P2 · B-110 (auto room switched), notified |
+| Faculty requests extra class in a free slot | ✅ pending request created, all admins notified |
+| Coordinator tries to approve the extra class | ✅ refused: "Only the admin can approve new class requests." |
+| Admin approves | ✅ session inserted into the published timetable (61 → 62), faculty notified |
+| Admin removes the manual session | ✅ deleted, notified, audited |
+
+Browser (headless Chromium): edit modal → change day/period → "CS302 moved to Fri P6 · A-202" toast, modal closes; Add-class modal opens with the viewed teacher prefilled; faculty form shows 24 clickable free-slot chips for the selected course/groups. No console errors.
+
+Also fixed: timetable version labels no longer duplicate after a draft is discarded.
+
+## 8. Coursework & timetable layout (this round)
+
+Runtime tests through the real Server Actions (faculty session, Dr. Rao):
+
+| Step | Result |
+|---|---|
+| Add syllabus unit to own course (CS302) | ✅ saved, audited |
+| Add syllabus unit / assignment to a course the teacher does not teach | ✅ blocked: "You can only manage coursework for courses you teach." |
+| Create + publish assignment | ✅ published, coordinator notified ("New assignment: CS302"), audited |
+| Add resource | ✅ saved |
+| Add resource with invalid URL | ✅ rejected by validation |
+| Toggle unit covered | ✅ coverage updated |
+
+Browser (headless Chromium): `/faculty/coursework` renders with course switcher, tabs and empty states; the New-assignment dialog opens; zero console/page errors. Admin `/admin/coursework` renders the oversight table. Page snapshots checked for the timetable editor after the layout fix (row headers aligned at x=301, grid 730 px inside 754 px, all five days visible).
+
+Fixed during this round: a Server Component was passing a `groups()` **function** to a Client Component (React forbids this) — replaced with a serializable `groupsByCourse` map.
