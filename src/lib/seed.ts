@@ -27,8 +27,28 @@ export function ensureSeeded() {
 
 async function run() {
   const client = await pool.connect();
+  let locked = false;
   try {
-    await client.query("select pg_advisory_lock(87412)");
+    const attempt = await client.query("select pg_try_advisory_lock(87412) as locked");
+    locked = Boolean(attempt.rows[0]?.locked);
+
+    if (!locked) {
+      // A killed serverless invocation can leave a session lock behind while its
+      // pooled connection drains. An already-initialised database is safe to use;
+      // never block every sign-in waiting for that stale lock.
+      const ready = await client.query("select to_regclass('public.users') as t");
+      if (ready.rows[0]?.t) {
+        const { rows } = await client.query("select count(*)::int as n from users");
+        if ((rows[0]?.n ?? 0) > 0) return;
+      }
+
+      // Only an empty installation waits for the active seeder, and that wait is
+      // bounded so a stale connection cannot take the application down.
+      await client.query("set statement_timeout = '10000ms'");
+      await client.query("select pg_advisory_lock(87412)");
+      locked = true;
+    }
+
     const exists = await client.query("select to_regclass('public.users') as t");
     if (!exists.rows[0]?.t) {
       for (const stmt of BOOTSTRAP_STATEMENTS) await client.query(stmt);
@@ -37,7 +57,8 @@ async function run() {
     if ((rows[0]?.n ?? 0) === 0) await seed();
     await ensureBookingExampleRooms();
   } finally {
-    await client.query("select pg_advisory_unlock(87412)").catch(() => undefined);
+    if (locked) await client.query("select pg_advisory_unlock(87412)").catch(() => undefined);
+    await client.query("set statement_timeout = 0").catch(() => undefined);
     client.release();
   }
 }
