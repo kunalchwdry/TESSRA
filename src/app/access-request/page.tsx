@@ -25,16 +25,13 @@ const CLUBS = [
 ];
 
 export default async function AccessRequestPage() {
-  let isAuthenticated = false;
   try {
     const user = await getCurrentUser();
     if (user) {
       redirect("/");
     }
-    isAuthenticated = true;
   } catch {
-    // If session check fails, allow access to the page anyway
-    isAuthenticated = true;
+    // Ignore session check errors — allow page to load
   }
 
   return (
