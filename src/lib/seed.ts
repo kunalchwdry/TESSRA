@@ -36,7 +36,6 @@ async function run() {
     const { rows } = await client.query("select count(*)::int as n from users");
     if ((rows[0]?.n ?? 0) === 0) await seed();
     await ensureBookingExampleRooms();
-    await ensureTeachingCalendarModel();
   } finally {
     await client.query("select pg_advisory_unlock(87412)").catch(() => undefined);
     client.release();
@@ -84,7 +83,7 @@ async function ensureBookingExampleRooms() {
  * nine-period calendar. The advisory lock in `run` makes this idempotent. A new
  * published version is generated instead of mutating the historical timetable.
  */
-async function ensureTeachingCalendarModel() {
+export async function ensureTeachingCalendarModel() {
   const stale = await db
     .select({ id: t.offerings.id })
     .from(t.offerings)
