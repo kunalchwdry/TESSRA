@@ -2,13 +2,9 @@
 
 import { Mail, ShieldCheck, UserPlus } from "lucide-react";
 import { useState } from "react";
-import type { Metadata } from "next";
 import { PRODUCT } from "@/lib/constants";
 import { Input, Select, Textarea } from "@/components/ui";
 import { buttonClasses } from "@/components/ui";
-
-export const metadata: Metadata = { title: "Request Access — " + PRODUCT.name };
-export const dynamic = "force-dynamic";
 
 const DEPARTMENTS = [
   { value: "CSE", label: "Computer Science & Engineering" },
@@ -46,7 +42,6 @@ export default function AccessRequestPage() {
     const clubId = Number(fd.get("clubId")) || null;
     const reason = (fd.get("reason") as string)?.trim();
 
-    // Client-side validation
     const errors: Record<string, string> = {};
     if (!name || name.length < 2) errors.name = "Enter your full name";
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Enter a valid email address";
