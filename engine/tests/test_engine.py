@@ -268,6 +268,20 @@ def test_apply_disruption_matches_official_semantics():
 
 
 # ------------------------------------------------------------------ official end-to-end
+def test_service_validator_copy_is_byte_identical_to_official_file():
+    """The deployed Python service must grade with the organiser file, not a rewrite."""
+    assert (ROOT / "engine/official_validator.py").read_bytes() == (PACK / "validator.py").read_bytes()
+
+
+def test_validated_service_boundary_returns_schedule_and_official_report():
+    from app import SolveRequest, solve_validated
+
+    result = solve_validated(SolveRequest(data=dataset(), time_limit=5), None)
+    assert result["schedule"]["solver"]["status"] in ("optimal", "feasible")
+    assert result["report"]["hard_violation_count"] == 0
+    assert result["report"]["dataset_id"] == "test-v1"
+
+
 @pytest.mark.skipif(not PACK.exists(), reason="official starter pack not present")
 def test_official_dataset_passes_official_validator(tmp_path):
     data_path = PACK / "data/cit_public.json"

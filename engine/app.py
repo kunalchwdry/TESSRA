@@ -1,11 +1,13 @@
 """TESSRA scheduling service — FastAPI wrapper around the CP-SAT engine.
 
-Run locally:   uvicorn app:app --host 0.0.0.0 --port 8000  (from engine/)
-Deploy on Render/Railway; point the Next.js app at it with ENGINE_URL.
-Long solves must run here, never inside a serverless function.
+Run locally: ``uvicorn app:app --host 0.0.0.0 --port 8000`` from ``engine/``.
+The service can run as a Vercel Python Service or on a container host.  Its
+validated endpoint returns both the generated schedule and the report produced
+by the byte-identical organiser validator bundled in this service directory.
 """
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -16,6 +18,8 @@ from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core import apply_disruption, build_schedule, check_assignment  # noqa: E402
+from official_validator import apply_disruption as validator_apply_disruption  # noqa: E402
+from official_validator import run as run_official_validator  # noqa: E402
 
 app = FastAPI(title="TESSRA Scheduling Engine", version="1.0.0")
 app.add_middleware(
@@ -48,7 +52,15 @@ class CheckRequest(BaseModel):
 @app.get("/health")
 def health():
     import ortools
-    return {"ok": True, "engine": "cp-sat", "ortools": ortools.__version__}
+
+    validator_path = Path(__file__).with_name("official_validator.py")
+    validator_sha256 = hashlib.sha256(validator_path.read_bytes()).hexdigest()
+    return {
+        "ok": True,
+        "engine": "cp-sat",
+        "ortools": ortools.__version__,
+        "validator_sha256": validator_sha256,
+    }
 
 
 @app.post("/solve")
@@ -56,6 +68,22 @@ def solve(req: SolveRequest, authorization: str | None = Header(default=None)):
     auth(authorization)
     data = apply_disruption(req.data, req.disruption) if req.disruption else req.data
     return build_schedule(data, team=req.team, time_limit=req.time_limit, baseline=req.baseline)
+
+
+@app.post("/solve-validated")
+def solve_validated(req: SolveRequest, authorization: str | None = Header(default=None)):
+    """Generate a schedule and grade it with the untouched organiser validator.
+
+    Keeping both operations in the Python service makes the live workflow work
+    on a serverless Next.js frontend without pretending that a TypeScript check
+    is the official validator.
+    """
+    auth(authorization)
+    data = apply_disruption(req.data, req.disruption) if req.disruption else req.data
+    schedule = build_schedule(data, team=req.team, time_limit=req.time_limit, baseline=req.baseline)
+    validator_data = validator_apply_disruption(req.data, req.disruption) if req.disruption else req.data
+    report = run_official_validator(validator_data, schedule, req.baseline)
+    return {"schedule": schedule, "report": report}
 
 
 @app.post("/check")

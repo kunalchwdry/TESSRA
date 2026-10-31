@@ -10,8 +10,7 @@ import {
   getOfficialDataset,
   getSampleDisruption,
   persistExport,
-  runEngine,
-  runOfficialValidator,
+  runOfficialPipeline,
   type OfficialSchedule,
 } from "./official";
 import { fail, ok, type ActionState } from "./utils";
@@ -29,17 +28,17 @@ async function latestScheduleRun() {
 export async function generateOfficialScheduleAction(_prev: ActionState, _fd: FormData): Promise<ActionState> {
   const user = await requireRole("admin");
   const data = await getOfficialDataset();
-  let schedule: OfficialSchedule;
+  let result: Awaited<ReturnType<typeof runOfficialPipeline>>;
   try {
-    schedule = await runEngine({ data, timeLimit: 90 });
+    result = await runOfficialPipeline({ data, timeLimit: 90 });
   } catch (err) {
     console.error(err);
-    return fail("The CP-SAT engine failed to run. Check that Python 3 with OR-Tools is available, or configure ENGINE_URL.");
+    return fail("The validated CP-SAT service failed to run. Please retry once; if it still fails, check the engine service health.");
   }
+  const { schedule, report } = result;
   if (!schedule.sessions.length) {
     return fail(`Solver returned ${schedule.solver?.status ?? "no result"}: ${(schedule.solver?.reasons ?? ["unknown"]).join("; ")}`);
   }
-  const report = await runOfficialValidator({ schedule });
   await persistExport("schedule.json", schedule);
   await persistExport("report.json", report);
   const count = (await db.select({ id: officialRuns.id }).from(officialRuns)).length;
@@ -71,17 +70,17 @@ export async function applyOfficialDisruptionAction(_prev: ActionState, _fd: For
   const baseline = baselineRun.schedule as unknown as OfficialSchedule;
   const data = await getOfficialDataset();
   const disruption = await getSampleDisruption();
-  let schedule: OfficialSchedule;
+  let result: Awaited<ReturnType<typeof runOfficialPipeline>>;
   try {
-    schedule = await runEngine({ data, disruption, baseline, timeLimit: 90 });
+    result = await runOfficialPipeline({ data, disruption, baseline, timeLimit: 90 });
   } catch (err) {
     console.error(err);
-    return fail("The CP-SAT engine failed to run the repair.");
+    return fail("The validated CP-SAT service failed to run the repair. Please retry once, then check engine health.");
   }
+  const { schedule, report } = result;
   if (!schedule.sessions.length) {
     return fail(`No valid repair found (${schedule.solver?.status ?? "unknown"}): ${(schedule.solver?.reasons ?? []).join("; ")}`);
   }
-  const report = await runOfficialValidator({ schedule, disruption, baseline });
   await persistExport("schedule_after.json", schedule);
   await persistExport("report_after.json", report);
   const count = (await db.select({ id: officialRuns.id }).from(officialRuns)).length;

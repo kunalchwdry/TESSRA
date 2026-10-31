@@ -136,6 +136,49 @@ export async function runOfficialValidator(opts: { schedule: OfficialSchedule; d
   return JSON.parse(await readFile(reportFile, "utf-8")) as ValidatorReport;
 }
 
+/**
+ * Generates and validates in one runtime boundary.
+ *
+ * In production the Vercel service binding injects ENGINE_URL and the Python
+ * service runs the byte-identical organiser validator. Locally, both commands
+ * are executed as subprocesses exactly as before.
+ */
+export async function runOfficialPipeline(opts: {
+  data: OfficialDataset;
+  disruption?: unknown;
+  baseline?: OfficialSchedule;
+  timeLimit?: number;
+}): Promise<{ schedule: OfficialSchedule; report: ValidatorReport }> {
+  const timeLimit = opts.timeLimit ?? 90;
+  const url = process.env.ENGINE_URL;
+  if (url) {
+    const res = await fetch(`${url.replace(/\/$/, "")}/solve-validated`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(process.env.ENGINE_TOKEN ? { Authorization: `Bearer ${process.env.ENGINE_TOKEN}` } : {}),
+      },
+      body: JSON.stringify({
+        data: opts.data,
+        disruption: opts.disruption ?? null,
+        baseline: opts.baseline ?? null,
+        team: "TESSRA",
+        time_limit: timeLimit,
+      }),
+      signal: AbortSignal.timeout((timeLimit + 90) * 1000),
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error(`Validated scheduling service returned HTTP ${res.status}`);
+    const value = (await res.json()) as { schedule?: OfficialSchedule; report?: ValidatorReport };
+    if (!value.schedule || !value.report) throw new Error("Validated scheduling service returned an incomplete response");
+    return { schedule: value.schedule, report: value.report };
+  }
+
+  const schedule = await runEngine(opts);
+  const report = await runOfficialValidator({ schedule, disruption: opts.disruption, baseline: opts.baseline });
+  return { schedule, report };
+}
+
 /** The repo's exports/ folder must contain app-produced files (official README rule). */
 export async function persistExport(name: "schedule.json" | "schedule_after.json" | "report.json" | "report_after.json", value: unknown) {
   try {

@@ -15,6 +15,8 @@ import { qs, readParams, type SearchParams } from "@/lib/params";
 import { cn, formatRelative, pct } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Official Dataset (CIT)" };
+/** CP-SAT usually finishes in ~25s; allow cold-start and validator headroom. */
+export const maxDuration = 240;
 
 const DAY_ORDER = ["MON", "TUE", "WED", "THU", "FRI"];
 const KIND_LABEL = { lecture: "Lecture", tutorial: "Tutorial", lab: "Lab" } as const;
