@@ -115,3 +115,19 @@ Runtime tests through the real Server Actions (faculty session, Dr. Rao):
 Browser (headless Chromium): `/faculty/coursework` renders with course switcher, tabs and empty states; the New-assignment dialog opens; zero console/page errors. Admin `/admin/coursework` renders the oversight table. Page snapshots checked for the timetable editor after the layout fix (row headers aligned at x=301, grid 730 px inside 754 px, all five days visible).
 
 Fixed during this round: a Server Component was passing a `groups()` **function** to a Client Component (React forbids this) — replaced with a serializable `groupsByCourse` map.
+
+## 9. Usability & dashboard production verification
+
+Commit `9146131` deployed successfully through Vercel and was exercised on `https://tessra-five.vercel.app` with authenticated headless Chromium at **1440×1000** and **390×844**:
+
+- Admin Quick start exposed the room, published-timetable and approval journeys on the first screen.
+- `Ctrl+K` intent search returned the room workflow; the palette also opened and fit correctly on phone.
+- Admin Live room finder checked a real date/time/capacity query, summarized free venues, sorted an available room first and retained the result on phone.
+- Published timetable exposed the group/faculty/room switcher.
+- A clean Approval Centre created a genuine validated faculty change, displayed its before/after placement, showed the revalidation confirmation, and approved it through the normal action successfully.
+- Official CIT timetable displayed the desktop grid at laptop width and the day agenda at phone width.
+- Coordinator navigation exposed its own Approval Centre and no longer contained a dead cross-role Admin link.
+- Admin Access Requests rendered exactly one application shell (the obsolete nested shell was removed).
+- Every checked page stayed within the document viewport; wide tables remain locally scrollable.
+
+**Result: 38 browser assertions passed; 0 console errors, 0 page errors and 0 HTTP 5xx responses.**
