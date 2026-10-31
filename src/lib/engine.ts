@@ -128,11 +128,21 @@ export async function generateVersion(actorId: number | null, notes: string | nu
     blocks: blockRows,
     fixed: fixedRows.map(toEngineSession),
   });
-  const [{ n }] = await db.select({ n: sql<number>`coalesce(max(id), 0)::int + 1` }).from(t.scheduleVersions);
-  const [version] = await db
-    .insert(t.scheduleVersions)
-    .values({ label: `Version ${n}`, status: "draft", notes, stats: result.stats, createdById: actorId })
-    .returning();
+  // Derive the display label from the committed serial ID. The insert + relabel
+  // transaction prevents concurrent serverless generations from producing two
+  // rows with the same max(id)+1 label.
+  const version = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(t.scheduleVersions)
+      .values({ label: "Version pending", status: "draft", notes, stats: result.stats, createdById: actorId })
+      .returning();
+    const [labeled] = await tx
+      .update(t.scheduleVersions)
+      .set({ label: `Version ${created.id}` })
+      .where(eq(t.scheduleVersions.id, created.id))
+      .returning();
+    return labeled;
+  });
   if (result.sessions.length) {
     await db.insert(t.scheduledSessions).values(
       result.sessions.map((s) => ({
@@ -167,18 +177,23 @@ export async function publishVersion(versionId: number) {
   });
 }
 
-/** Repair legacy duplicate-published rows left by an interrupted concurrent run. */
+/** Repair legacy duplicate publication states and race-generated labels. */
 export async function ensureSinglePublishedVersion() {
   await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(${PUBLISH_LOCK})`);
-    const published = await tx
-      .select({ id: t.scheduleVersions.id })
+    const versions = await tx
+      .select({ id: t.scheduleVersions.id, label: t.scheduleVersions.label, status: t.scheduleVersions.status })
       .from(t.scheduleVersions)
-      .where(eq(t.scheduleVersions.status, "published"))
       .orderBy(desc(t.scheduleVersions.id));
-    const stale = published.slice(1).map((version) => version.id);
+    const stale = versions.filter((version) => version.status === "published").slice(1).map((version) => version.id);
     if (stale.length) {
       await tx.update(t.scheduleVersions).set({ status: "archived" }).where(inArray(t.scheduleVersions.id, stale));
+    }
+    for (const version of versions) {
+      const label = `Version ${version.id}`;
+      if (version.label !== label) {
+        await tx.update(t.scheduleVersions).set({ label }).where(eq(t.scheduleVersions.id, version.id));
+      }
     }
   });
 }
