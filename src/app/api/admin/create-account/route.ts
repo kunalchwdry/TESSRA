@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
-import { createClient as createSupabaseClient, isConfigured } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient, createAdminClient, isConfigured } from "@/lib/supabase/server";
 import { db } from "@/db";
 import * as t from "@/db/schema";
 import { hashPassword } from "@/lib/password";
@@ -67,9 +67,9 @@ export async function POST(req: Request) {
     })
     .returning();
 
-  // Also create Supabase Auth user if configured
+  // Also create Supabase Auth user if configured — admin.createUser requires service role key
   if (isConfigured) {
-    const supabase = await createSupabaseClient();
+    const supabase = await createAdminClient();
     if (supabase) {
       try {
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({

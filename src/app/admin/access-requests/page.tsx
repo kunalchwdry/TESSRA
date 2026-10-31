@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { requireRole, requireUser } from "@/lib/auth";
 import { RoleShell } from "@/components/role-shell";
 import { revalidatePath } from "next/cache";
-import { createClient as createSupabaseClient, isConfigured } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient, createAdminClient, isConfigured } from "@/lib/supabase/server";
 import { db } from "@/db";
 import * as t from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -48,9 +48,9 @@ export async function approveAccessRequestForm(fd: FormData) {
     })
     .returning();
 
-  // Create matching Supabase Auth user if configured
+  // Create matching Supabase Auth user if configured — admin.createUser requires service role key
   if (isConfigured) {
-    const supabase = await createSupabaseClient();
+    const supabase = await createAdminClient();
     if (supabase) {
       try {
         const { data: authData, error: authError } = await supabase.auth.admin.createUser({
