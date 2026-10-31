@@ -36,7 +36,7 @@ Rejections are legitimate: BR-04 is on the official cancellations list; BR-09 ne
 
 ## 3. Web application
 ```
-npm run test:unit           → 33/33 tests passed (17 booking parser + 3 explanations + 3 LLM boundary + 3 navigation + 7 disruption/workflow tests)
+npm run test:unit           → 41/41 tests passed (25 booking parser + 3 explanations + 3 LLM boundary + 3 navigation + 7 disruption/workflow tests)
 npm run typecheck           → 0 errors
 npm run lint                → 0 problems
 npm run build               → all routes compiled (Next.js 16.4.3 App Router)

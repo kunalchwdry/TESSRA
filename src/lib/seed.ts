@@ -34,8 +34,8 @@ async function run() {
       for (const stmt of BOOTSTRAP_STATEMENTS) await client.query(stmt);
     }
     const { rows } = await client.query("select count(*)::int as n from users");
-    if ((rows[0]?.n ?? 0) > 0) return;
-    await seed();
+    if ((rows[0]?.n ?? 0) === 0) await seed();
+    await ensureBookingExampleRooms();
   } finally {
     await client.query("select pg_advisory_unlock(87412)").catch(() => undefined);
     client.release();
@@ -43,6 +43,40 @@ async function run() {
 }
 
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3600_000);
+
+/**
+ * Keep the two seminar halls used by the organiser's public NLP example in the
+ * compact demo campus as real selectable venues. The idempotent upsert also
+ * upgrades existing deployments without resetting judges' data: SH-2 is
+ * deliberately inaccessible, so an accessible request must propose SH-1.
+ */
+async function ensureBookingExampleRooms() {
+  await db
+    .insert(t.rooms)
+    .values([
+      {
+        code: "SH-1",
+        name: "Seminar Hall 1",
+        building: "Convocation Centre",
+        type: "seminar",
+        capacity: 150,
+        features: ["Projector", "Audio system", "Stage lighting", "Air conditioning"],
+        accessible: true,
+        bookable: true,
+      },
+      {
+        code: "SH-2",
+        name: "Seminar Hall 2",
+        building: "Convocation Centre",
+        type: "seminar",
+        capacity: 100,
+        features: ["Projector", "Audio system", "Air conditioning"],
+        accessible: false,
+        bookable: true,
+      },
+    ])
+    .onConflictDoNothing({ target: t.rooms.code });
+}
 
 async function seed() {
   const passwordHash = hashPassword(DEMO_PASSWORD);

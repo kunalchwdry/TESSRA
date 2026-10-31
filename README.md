@@ -201,7 +201,7 @@ engine/          — CP-SAT model (hard H1–H14, soft S1–S6), bookings, exams
 official/        — Untouched starter pack + problem statement
 exports/         — App-produced schedule.json, schedule_after.json, validator reports
 src/             — Next.js App Router: four role workspaces, auth, audit, notifications
-docs/            — REQUIREMENTS_TRACEABILITY · DATA_DICTIONARY · ARCHITECTURE · DEPLOYMENT · TESTING
+docs/            — requirements, architecture, deployment, testing and submission audit evidence
 access.md        — Complete access credentials (this repo)
 AI_USAGE.md      — Full AI declaration
 IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
@@ -244,6 +244,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 - `docs/REQUIREMENTS_TRACEABILITY.md` — Requirement → implementation mapping
 - `docs/CONSTRAINT_VERIFICATION.md` — H1–H14/S1–S6 model and executed validator evidence
 - `docs/TESTING.md` — Test strategy and coverage
+- `docs/SUBMISSION_AUDIT.md` — Official-file, ZIP, constraint and defensible score audit
 - `IMPLEMENTATION_STATUS.md` — Current implementation state
 
 ---
