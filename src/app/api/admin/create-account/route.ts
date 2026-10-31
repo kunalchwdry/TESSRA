@@ -6,7 +6,7 @@ import * as t from "@/db/schema";
 import { hashPassword } from "@/lib/password";
 import type { Role } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
-import { ok, fail } from "@/lib/utils";
+import { fail } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +86,7 @@ export async function POST(req: Request) {
   }
 
   return json(
-    ok("Account created successfully.", { id: newUser.id, email: newUser.email, role: newUser.role }),
+    { ok: true, message: "Account created successfully.", user: { id: newUser.id, email: newUser.email, role: newUser.role } },
     201
   );
 }
