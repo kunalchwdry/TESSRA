@@ -32,10 +32,7 @@ export async function POST(req: Request) {
   if (!password || password.length < 8) errors.password = "Password must be at least 8 characters";
   if (!VALID_ROLES.includes(requestedRole as Role)) errors.requestedRole = "Select a valid role";
   if (!reason || reason.length < 10) errors.reason = "Please explain why you need access (10+ characters)";
-  if (requestedRole === "coordinator" && !departmentId) errors.departmentId = "Select your department";
-  if (requestedRole === "club" && !clubId) errors.clubId = "Select your club";
   if (Object.keys(errors).length) return json({ ok: false, message: "Please fix the highlighted fields.", errors }, 400);
-
   // Check for duplicate email in users or access_requests
   const [existingUser] = await db.select().from(t.users).where(eq(t.users.email, email)).limit(1);
   if (existingUser) return json({ ok: false, message: "An account with this email already exists." }, 409);
