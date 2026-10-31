@@ -28,6 +28,19 @@ All four demo accounts use password **`tessra123`** and are pre-approved.
 | **Faculty** | `ananya.rao@westbrook.edu` | `/faculty` |
 | **Club Representative** | `robotics@westbrook.edu` | `/club` |
 
+## ⚡ Three-minute evaluator path
+
+1. Open the [live app](https://tessra-five.vercel.app), choose the **Administrator** demo card, and sign in (the shared password is prefilled by the card).
+2. On **Admin Overview**, use the **Quick start** strip:
+   - **Find a room** → enter capacity plus a date/time; results are checked live against classes, exams and approved bookings.
+   - **Read the timetable** → open the published week and switch between group, faculty and room views.
+   - **Approve a change** → open Approval Centre. If the clean demo queue is empty, click **Prepare approval example**; it creates one genuine conflict-free faculty request that can be approved or rejected normally.
+3. Press **Ctrl/⌘ K** anywhere to search pages by intent — try “room”, “timetable”, “approval”, or “booking”.
+4. For official scoring, open **Admin → Official Dataset**. Switch the full CIT timetable between group/faculty/room (phones receive a day agenda), generate/download `schedule.json`, upload a disruption JSON, inspect the exact diff, and separately approve it before `schedule_after.json` unlocks.
+5. Optional role checks: Faculty → phone-friendly timetable/change request; Club → live venue finder/booking; Coordinator → department approvals.
+
+No evaluator-only bypass exists: availability, changes, approvals and exports use the same validation and audit paths as normal actions.
+
 ### Full access credentials
 
 See **[access.md](./access.md)** for the complete list of accounts, passwords, Supabase project details, Vercel deployment info, and database migration data.

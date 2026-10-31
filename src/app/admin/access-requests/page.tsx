@@ -1,26 +1,20 @@
-import { Check, Clock, Mail, UserPlus, X } from "lucide-react";
+import { Check, Clock, UserPlus, X } from "lucide-react";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { requireRole, requireUser } from "@/lib/auth";
-import { RoleShell } from "@/components/role-shell";
+import { requireRole } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { createClient as createSupabaseClient, createAdminClient, isConfigured } from "@/lib/supabase/server";
+import { createAdminClient, isConfigured } from "@/lib/supabase/server";
 import { db } from "@/db";
 import * as t from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { hashPassword } from "@/lib/password";
-import { fail, ok } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Access Requests" };
 export const dynamic = "force-dynamic";
 
-/** Wrapper for Next.js <form action> — server action with admin/coordinator auth. */
+/** Wrapper for Next.js <form action> — independently enforces Admin access. */
 export async function approveAccessRequestForm(fd: FormData) {
   "use server";
-  const user = await requireUser();
-  if (!user || (user.role !== "admin" && user.role !== "coordinator")) {
-    throw new Error("Admin or Coordinator access required.");
-  }
+  const user = await requireRole("admin");
   const id = Number(fd.get("id"));
   const note = (fd.get("note") as string) || null;
 
@@ -72,7 +66,7 @@ export async function approveAccessRequestForm(fd: FormData) {
 
   await db
     .update(t.accessRequests)
-    .set({ status: "approved", reviewedById: newUser.id, reviewNote: note, reviewedAt: new Date() })
+    .set({ status: "approved", reviewedById: user.id, reviewNote: note, reviewedAt: new Date() })
     .where(eq(t.accessRequests.id, id));
 
   revalidatePath("/admin/access-requests");
@@ -80,10 +74,7 @@ export async function approveAccessRequestForm(fd: FormData) {
 
 export async function rejectAccessRequestForm(fd: FormData) {
   "use server";
-  const user = await requireUser();
-  if (!user || (user.role !== "admin" && user.role !== "coordinator")) {
-    throw new Error("Admin or Coordinator access required.");
-  }
+  const user = await requireRole("admin");
   const id = Number(fd.get("id"));
   const reason = (fd.get("reason") as string) || "";
 
@@ -97,17 +88,14 @@ export async function rejectAccessRequestForm(fd: FormData) {
 
   await db
     .update(t.accessRequests)
-    .set({ status: "rejected", reviewNote: reason, reviewedAt: new Date() })
+    .set({ status: "rejected", reviewedById: user.id, reviewNote: reason, reviewedAt: new Date() })
     .where(eq(t.accessRequests.id, id));
 
   revalidatePath("/admin/access-requests");
 }
 
 export default async function AccessRequestsPage() {
-  const user = await requireUser();
-  if (!user || (user.role !== "admin" && user.role !== "coordinator")) {
-    redirect("/login");
-  }
+  await requireRole("admin");
   const [requests] = await Promise.all([
     db
       .select({
@@ -130,8 +118,7 @@ export default async function AccessRequestsPage() {
   ]);
 
   return (
-    <RoleShell role="admin">
-      <div className="space-y-6">
+    <div className="space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-ink">Access Requests</h1>
@@ -233,7 +220,6 @@ export default async function AccessRequestsPage() {
             </p>
           </div>
         )}
-      </div>
-    </RoleShell>
+    </div>
   );
 }

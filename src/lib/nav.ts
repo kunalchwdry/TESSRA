@@ -76,7 +76,7 @@ export const NAV: Record<Role, NavSection[]> = {
     {
       title: "Governance",
       items: [
-        { label: "Account Access", href: "/admin/access-requests", icon: "approvals" },
+        { label: "Approval Centre", href: "/coordinator/approvals", icon: "approvals", badge: "approvals" },
         { label: "Reports", href: "/coordinator/reports", icon: "reports" },
       ],
     },

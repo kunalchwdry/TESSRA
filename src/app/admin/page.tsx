@@ -1,9 +1,11 @@
-import { ArrowRight, Building, CalendarClock, CalendarDays, Gauge, GraduationCap, ShieldAlert, ShieldCheck, Ticket, UserCheck, Activity } from "lucide-react";
+import { Activity, ArrowRight, Building, CalendarClock, CalendarDays, FlaskConical, Gauge, GraduationCap, Search, ShieldAlert, ShieldCheck, Ticket, UserCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ActionForm, SubmitButton } from "@/components/client";
 import { ActivityFeed, UpcomingBookingRow } from "@/components/domain";
 import { ResetDemoDataButton } from "@/components/reset-demo-data";
 import { Avatar, Badge, BarList, ButtonLink, Card, CardHeader, EmptyState, PageHeader, PriorityBadge, ProgressBar, StatCard } from "@/components/ui";
+import { prepareApprovalDemoAction } from "@/lib/actions";
 import { requireRole } from "@/lib/auth";
 import { DAYS } from "@/lib/constants";
 import { getExams, getPublishedTimetable, getRef, getSettings, listAudit, listBookings, listChangeRequests, listDisruptions } from "@/lib/queries";
@@ -85,6 +87,54 @@ export default async function AdminOverviewPage() {
           </>
         }
       />
+
+      <Card className="mb-6 overflow-hidden">
+        <div className="border-b border-line bg-gradient-to-r from-brand-50/80 via-surface to-surface px-5 py-4 sm:px-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="flex items-center gap-2">
+                <Badge tone="brand">Quick start</Badge>
+                <span className="text-xs text-ink-2">Three common operations · live data</span>
+              </div>
+              <h2 id="common-workflows" className="mt-2 text-base font-semibold text-ink">Find it, read it, decide it</h2>
+              <p className="mt-0.5 text-[13px] text-ink-2">Direct paths to the workflows used most often by campus operations.</p>
+            </div>
+            <span className="text-xs font-medium text-ink-2">Use <kbd className="rounded border border-line bg-surface px-1.5 py-0.5 font-mono text-[11px]">Ctrl/⌘ K</kbd> from anywhere to jump to a page</span>
+          </div>
+        </div>
+        <div className="grid md:grid-cols-3">
+          <Link href="/admin/venues" className="group flex gap-3 border-b border-line px-5 py-4 outline-none transition-colors hover:bg-subtle focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-brand-500/30 md:border-b-0 md:border-r">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700"><Search className="size-4" aria-hidden /></span>
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-3">1 · Find a room</span>
+              <span className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-ink">Live venue availability <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
+              <span className="mt-1 block text-xs leading-4 text-ink-2">Filter by capacity, features, date and time.</span>
+            </span>
+          </Link>
+          <Link href="/admin/scheduling" className="group flex gap-3 border-b border-line px-5 py-4 outline-none transition-colors hover:bg-subtle focus-visible:ring-[3px] focus-visible:ring-inset focus-visible:ring-brand-500/30 md:border-b-0 md:border-r">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700"><FlaskConical className="size-4" aria-hidden /></span>
+            <span className="min-w-0">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-3">2 · Read the timetable</span>
+              <span className="mt-0.5 flex items-center gap-1 text-sm font-semibold text-ink">Published week view <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden /></span>
+              <span className="mt-1 block text-xs leading-4 text-ink-2">Switch between group, faculty and room.</span>
+            </span>
+          </Link>
+          <div className="flex gap-3 px-5 py-4">
+            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700"><ShieldCheck className="size-4" aria-hidden /></span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-semibold uppercase tracking-wide text-ink-3">3 · Approve a change</span>
+              <Link href="/admin/approvals" className="group mt-0.5 flex items-center gap-1 text-sm font-semibold text-ink hover:text-brand-700">Approval Centre <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" aria-hidden /></Link>
+              {approvals > 0 ? (
+                <span className="mt-1 block text-xs leading-4 text-ink-2">{plural(approvals, "decision")} ready with conflict checks.</span>
+              ) : (
+                <ActionForm action={prepareApprovalDemoAction} className="mt-2 inline-flex">
+                  <SubmitButton variant="secondary" size="sm" pendingLabel="Preparing…">Prepare safe example</SubmitButton>
+                </ActionForm>
+              )}
+            </span>
+          </div>
+        </div>
+      </Card>
 
       <section aria-label="Key metrics" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard

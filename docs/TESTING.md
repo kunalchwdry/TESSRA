@@ -34,14 +34,14 @@ Rejections are legitimate: BR-04 is on the official cancellations list; BR-09 ne
 
 ## 3. Web application
 ```
-npm run test:unit           → 14/14 tests passed (7 booking parser + 7 disruption/workflow tests)
+npm run test:unit           → 17/17 tests passed (7 booking parser + 3 navigation + 7 disruption/workflow tests)
 npm run typecheck           → 0 errors
 npm run lint                → 0 problems
 npm run build               → all routes compiled (Next.js 16.4.3 App Router)
 npm audit --omit=dev        → 0 production vulnerabilities
 ```
 
-Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions, missing-value follow-ups and the UTC-to-Asia/Kolkata date boundary used on serverless hosts. Disruption tests cover the supplied sample, all five supported change types, references to newly added entities, wrong-dataset files, unknown entities/types/fields, and malformed added sessions.
+Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions, missing-value follow-ups and the UTC-to-Asia/Kolkata date boundary used on serverless hosts. Navigation tests prove every role-menu destination maps to a real route, the room/timetable/approval judge tasks stay directly exposed, and nested-route matching selects the correct item. Disruption tests cover the supplied sample, all five supported change types, references to newly added entities, wrong-dataset files, unknown entities/types/fields, and malformed added sessions.
 
 ## 4. Runtime & security checks (executed against production)
 - Every route of all four roles → HTTP 200 with real data; anon → `/login`; wrong role → own workspace; exports 403 for unauthorized roles.

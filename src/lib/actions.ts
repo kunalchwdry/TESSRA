@@ -8,6 +8,7 @@ import * as t from "@/db/schema";
 import { respond } from "./assistant";
 import { endSession, requireRole, requireUser } from "./auth";
 import { hashPassword } from "./password";
+import { findAlternatives } from "./scheduler";
 import { BOOKING_CATEGORIES, BOOKING_NEEDS, DAY_SHORT, ROOM_FEATURES, type ChangeType, type Priority, type RoomStatus, type RoomType, type SessionKind } from "./constants";
 import {
   applyDisruptionPlan,
@@ -1042,6 +1043,64 @@ export async function rejectAccessRequestAction(_prev: ActionState, fd: FormData
   await audit(user.id, "access_request.rejected", "access_request", id, `Rejected access request for ${req.name} (${req.email})`);
   refresh();
   return ok(`Rejected — ${req.name} has been notified.`);
+}
+
+/* ======================= Evaluation walkthrough data ====================== */
+/** Adds one real, conflict-free request when a clean demo has no approval work. */
+export async function prepareApprovalDemoAction(_prev: ActionState, _fd: FormData): Promise<ActionState> {
+  const admin = await requireRole("admin");
+  const [existing] = await db
+    .select({ id: t.changeRequests.id })
+    .from(t.changeRequests)
+    .where(eq(t.changeRequests.status, "pending"))
+    .limit(1);
+  if (existing) return ok("The approval queue is already ready to review.");
+
+  const version = await getPublishedVersion();
+  if (!version) return fail("Publish a timetable before preparing an approval example.");
+  const [faculty] = await db
+    .select({ id: t.users.id, name: t.users.name })
+    .from(t.users)
+    .where(eq(t.users.email, "ananya.rao@westbrook.edu"))
+    .limit(1);
+  if (!faculty) return fail("The demo faculty account is unavailable.");
+
+  const state = await loadEngineState(version.id);
+  let selected: (typeof state.sessions)[number] | undefined;
+  let alternative: ReturnType<typeof findAlternatives>[number] | undefined;
+  for (const session of state.sessions.filter((candidate) => candidate.facultyId === faculty.id && !candidate.isFixed)) {
+    const next = findAlternatives(state.sessions, session.id, state.ctx, { avoidDays: [session.day], limit: 1 })[0];
+    if (next) {
+      selected = session;
+      alternative = next;
+      break;
+    }
+  }
+  if (!selected || !alternative) return fail("No safe alternative could be prepared for the walkthrough. Regenerate the demo timetable and retry.");
+
+  const [request] = await db
+    .insert(t.changeRequests)
+    .values({
+      facultyId: faculty.id,
+      sessionId: selected.id,
+      type: "reschedule",
+      reason: "Department review meeting conflicts with this class. Please approve the validated alternative slot.",
+      proposedDay: alternative.day,
+      proposedPeriod: alternative.startPeriod,
+      proposedRoomId: alternative.roomId,
+      status: "pending",
+      snapshot: {
+        courseCode: state.labels.course(selected.courseId),
+        courseTitle: state.courses.get(selected.courseId)?.title ?? "Scheduled class",
+        groups: selected.groupIds.map(state.labels.group).join(" + "),
+        from: slotRef(selected, state.labels),
+      },
+    })
+    .returning();
+  await notify(faculty.id, "Demo change request prepared", "A validated reschedule request is ready for Admin review.", "info", "/faculty/requests");
+  await audit(admin.id, "demo.approval_prepared", "change_request", request.id, `Prepared a conflict-free ${request.snapshot?.courseCode ?? "class"} reschedule for the approval walkthrough`);
+  refresh();
+  return ok("Approval example ready. Review its before/after placement and approve or reject it.");
 }
 
 /* ============================ Reset demo data =========================== */

@@ -42,8 +42,9 @@ function OfficialGrid({ data, placements, movedIds, addedIds }: { data: Official
     return out;
   });
   return (
-    <div className="scrollbar-thin overflow-x-auto">
-      <div className="grid min-w-[820px]" style={{ gridTemplateColumns: "76px repeat(5, minmax(0,1fr))", gridTemplateRows: "40px repeat(5, minmax(72px,auto)) 28px repeat(4, minmax(72px,auto))" }} role="grid" aria-label="Official weekly timetable">
+    <>
+      <div className="scrollbar-thin hidden overflow-x-auto md:block">
+        <div className="grid min-w-[820px]" style={{ gridTemplateColumns: "76px repeat(5, minmax(0,1fr))", gridTemplateRows: "40px repeat(5, minmax(72px,auto)) 28px repeat(4, minmax(72px,auto))" }} role="grid" aria-label="Official weekly timetable">
         <div className="border-b border-r border-line bg-subtle" style={{ gridColumn: 1, gridRow: 1 }} />
         {DAY_ORDER.map((d, i) => (
           <div key={d} role="columnheader" className={cn("flex items-center px-3 text-[13px] font-semibold text-ink border-b border-line bg-subtle", i < 4 && "border-r")} style={{ gridColumn: i + 2, gridRow: 1 }}>
@@ -90,8 +91,54 @@ function OfficialGrid({ data, placements, movedIds, addedIds }: { data: Official
             </div>
           )),
         )}
+        </div>
       </div>
-    </div>
+      <div className="divide-y divide-line md:hidden">
+        {DAY_ORDER.map((day) => {
+          const dayPlacements = placements.filter((placement) => placement.day === day).sort((a, b) => a.start_period - b.start_period);
+          return (
+            <section key={day} className="py-4 first:pt-1 last:pb-1" aria-label={`${day} official timetable`}>
+              <h3 className="mb-2.5 flex items-center justify-between text-[13px] font-semibold text-ink">
+                {day}<span className="text-xs font-normal text-ink-3">{dayPlacements.length} session{dayPlacements.length === 1 ? "" : "s"}</span>
+              </h3>
+              {dayPlacements.length ? (
+                <ul className="space-y-2">
+                  {dayPlacements.map((placement) => {
+                    const session = sessions.get(placement.session_id);
+                    if (!session) return null;
+                    const period = data.calendar.periods.find((item) => item.id === placement.start_period);
+                    const endPeriod = data.calendar.periods.find((item) => item.id === placement.start_period + session.duration - 1);
+                    const style = KIND_STYLE[session.kind];
+                    return (
+                      <li key={placement.session_id} className={cn("rounded-lg border border-l-[3px] border-transparent p-3", style.card)}>
+                        <div className="flex items-start gap-3">
+                          <div className="w-[76px] shrink-0">
+                            <p className="text-xs font-semibold text-ink">P{placement.start_period}{session.duration > 1 ? `–P${placement.start_period + session.duration - 1}` : ""}</p>
+                            <p className="tabular text-[11px] text-ink-2">{period?.start ?? "—"}–{endPeriod?.end ?? period?.end ?? "—"}</p>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className={cn("text-[13px] font-semibold", style.text)}>{session.course_id} <span className="font-normal text-ink">· {session.id}</span></p>
+                            <p className="mt-0.5 text-xs text-ink-2">{session.groups.join(" + ")} · {placement.room_id}</p>
+                            <p className="mt-0.5 text-xs text-ink-3">{session.faculty_id} · {KIND_LABEL[session.kind]}</p>
+                            <div className="mt-2 flex flex-wrap gap-1">
+                              {session.basket_slot && <Badge tone="outline">{session.basket_slot}</Badge>}
+                              {movedIds?.has(placement.session_id) && <Badge tone="warning">Moved</Badge>}
+                              {addedIds?.has(placement.session_id) && <Badge tone="success">New</Badge>}
+                            </div>
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : (
+                <p className="rounded-lg border border-dashed border-line px-3 py-2.5 text-xs text-ink-3">No sessions scheduled</p>
+              )}
+            </section>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -384,7 +431,7 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
           />
         </Card>
       ) : (
-        <div className="space-y-6">
+        <div id="official-results" className="scroll-mt-20 space-y-6">
           <Card>
             <div className="flex flex-col gap-3 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">

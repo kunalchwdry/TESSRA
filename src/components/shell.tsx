@@ -25,6 +25,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   ScrollText,
+  Search,
   Settings,
   ShieldCheck,
   Ticket,
@@ -75,6 +76,32 @@ const ICONS: Record<NavIconKey, LucideIcon> = {
 
 type ShellUser = { name: string; email: string; roleLabel: string; subtitle: string | null };
 type Mode = "responsive" | "rail" | "full";
+type QuickJump = { label: string; description: string; href: string; icon: NavIconKey; keywords: string };
+
+const QUICK_JUMPS: Record<Role, QuickJump[]> = {
+  admin: [
+    { label: "Find an available room", description: "Live availability by capacity, date and time", href: "/admin/venues", icon: "venues", keywords: "find free room venue space capacity" },
+    { label: "Read the official timetable", description: "CIT views by group, faculty or room", href: "/admin/official#official-results", icon: "official", keywords: "read timetable official cit schedule" },
+    { label: "Approve a change", description: "Review validated requests and disruption plans", href: "/admin/approvals", icon: "approvals", keywords: "approve reject change decision request" },
+    { label: "Generate a timetable", description: "Open Smart Scheduling and CP-SAT controls", href: "/admin/scheduling", icon: "scheduling", keywords: "generate solve timetable schedule" },
+  ],
+  coordinator: [
+    { label: "Read department timetable", description: "Weekly CSE sessions and conflicts", href: "/coordinator/scheduling", icon: "timetable", keywords: "read timetable schedule department" },
+    { label: "Approve a faculty request", description: "Validated changes from your department", href: "/coordinator/approvals", icon: "approvals", keywords: "approve reject change faculty" },
+    { label: "Check faculty availability", description: "Teaching load and unavailable slots", href: "/coordinator/faculty", icon: "faculty", keywords: "faculty teacher free availability load" },
+  ],
+  faculty: [
+    { label: "Read my timetable", description: "Phone-friendly agenda and weekly grid", href: "/faculty/timetable", icon: "timetable", keywords: "read timetable schedule classes" },
+    { label: "Request a schedule change", description: "Choose a conflict-free alternative", href: "/faculty/requests", icon: "requests", keywords: "move reschedule request class room" },
+    { label: "Mark unavailable time", description: "Update weekly availability", href: "/faculty/availability", icon: "availability", keywords: "unavailable block free time" },
+    { label: "Ask the schedule assistant", description: "Plain-English, validated proposals", href: "/faculty/assistant", icon: "assistant", keywords: "ai ask help schedule room" },
+  ],
+  club: [
+    { label: "Find an available venue", description: "Check live date and time availability", href: "/club/venues", icon: "discover", keywords: "find free room venue space" },
+    { label: "Create a booking", description: "Submit an editable, validated request", href: "/club/bookings/new", icon: "newBooking", keywords: "new request book venue event" },
+    { label: "Track my requests", description: "See status, reasons and alternatives", href: "/club/bookings", icon: "bookings", keywords: "status reason pending rejected approved" },
+  ],
+};
 
 function SidebarContent({
   role,
@@ -213,6 +240,78 @@ function SidebarContent({
   );
 }
 
+function CommandPalette({ role, onClose }: { role: Role; onClose: () => void }) {
+  const [query, setQuery] = useState("");
+  const needle = query.trim().toLowerCase();
+  const quick = QUICK_JUMPS[role].filter((item) => !needle || `${item.label} ${item.description} ${item.keywords}`.toLowerCase().includes(needle));
+  const pages = NAV[role]
+    .flatMap((section) => section.items.map((item) => ({ ...item, section: section.title })))
+    .filter((item) => !needle || `${item.label} ${item.section}`.toLowerCase().includes(needle));
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-start justify-center px-3 pt-[10vh] sm:px-6" role="dialog" aria-modal="true" aria-label="Jump to a page">
+      <button type="button" className="absolute inset-0 cursor-default bg-ink/45 backdrop-blur-[2px]" onClick={onClose} aria-label="Close page search" />
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-line bg-surface shadow-pop animate-scale-in">
+        <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+          <Search className="size-5 shrink-0 text-ink-3" aria-hidden />
+          <input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === "Escape") onClose(); }}
+            placeholder="Find a room, timetable, approval…"
+            className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-3"
+            aria-label="Search pages and tasks"
+          />
+          <kbd className="rounded-md border border-line bg-subtle px-1.5 py-0.5 font-mono text-[10px] text-ink-3">Esc</kbd>
+        </div>
+        <div className="scrollbar-thin max-h-[min(65vh,520px)] overflow-y-auto p-2">
+          {quick.length > 0 && (
+            <section aria-labelledby="quick-jumps-label">
+              <p id="quick-jumps-label" className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-3">Common tasks</p>
+              <ul className="space-y-1">
+                {quick.map((item) => {
+                  const Icon = ICONS[item.icon];
+                  return (
+                    <li key={`${item.label}-${item.href}`}>
+                      <Link href={item.href} onClick={onClose} className="group flex items-center gap-3 rounded-xl px-3 py-2.5 outline-none transition-colors hover:bg-brand-50 focus-visible:bg-brand-50 focus-visible:ring-[3px] focus-visible:ring-brand-500/25">
+                        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-700"><Icon className="size-4" aria-hidden /></span>
+                        <span className="min-w-0 flex-1"><span className="block text-[13px] font-semibold text-ink">{item.label}</span><span className="block truncate text-xs text-ink-2">{item.description}</span></span>
+                        <span className="text-xs font-medium text-brand-700 opacity-0 transition-opacity group-hover:opacity-100">Open</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+          {pages.length > 0 && (
+            <section className={quick.length ? "mt-3 border-t border-line pt-2" : ""} aria-labelledby="all-pages-label">
+              <p id="all-pages-label" className="px-2 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-3">Pages</p>
+              <ul className="grid gap-1 sm:grid-cols-2">
+                {pages.map((item) => {
+                  const Icon = ICONS[item.icon];
+                  return (
+                    <li key={item.href}>
+                      <Link href={item.href} onClick={onClose} className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-ink-2 outline-none transition-colors hover:bg-subtle hover:text-ink focus-visible:ring-[3px] focus-visible:ring-brand-500/25">
+                        <Icon className="size-4 shrink-0 text-ink-3" aria-hidden /><span className="min-w-0 flex-1 truncate">{item.label}</span><span className="text-[10px] text-ink-3">{item.section}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
+          {!quick.length && !pages.length && (
+            <div className="px-4 py-12 text-center"><Search className="mx-auto size-6 text-ink-3" aria-hidden /><p className="mt-2 text-sm font-semibold text-ink">No matching page</p><p className="mt-1 text-xs text-ink-2">Try “room”, “timetable” or “approval”.</p></div>
+          )}
+        </div>
+        <div className="flex items-center justify-between border-t border-line bg-subtle px-4 py-2 text-[11px] text-ink-3"><span>Searches navigation only — no data is changed</span><span>⌘ K</span></div>
+      </div>
+    </div>
+  );
+}
+
 export function AppFrame({
   role,
   user,
@@ -233,6 +332,7 @@ export function AppFrame({
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const [drawer, setDrawer] = useState(false);
+  const [palette, setPalette] = useState(false);
   const menuButton = useRef<HTMLButtonElement>(null);
   const current = activeNavItem(role, pathname);
 
@@ -260,6 +360,33 @@ export function AppFrame({
     };
   }, [drawer]);
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing = target?.tagName === "INPUT" || target?.tagName === "TEXTAREA" || target?.isContentEditable;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setDrawer(false);
+        setPalette((value) => !value);
+      } else if (event.key === "/" && !typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        setDrawer(false);
+        setPalette(true);
+      } else if (event.key === "Escape") {
+        setPalette(false);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (!palette) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [palette]);
+
   const notificationsHref = role === "faculty" ? "/faculty/notifications" : role === "club" ? "/club/notifications" : null;
   const approvalsHref = role === "admin" ? "/admin/approvals" : role === "coordinator" ? "/coordinator/approvals" : null;
   const unread = badges.notifications ?? 0;
@@ -273,6 +400,8 @@ export function AppFrame({
       >
         Skip to content
       </a>
+
+      {palette && <CommandPalette role={role} onClose={() => setPalette(false)} />}
 
       <aside
         className={cn(
@@ -329,6 +458,17 @@ export function AppFrame({
               <CalendarRange className="size-3.5 text-ink-3" aria-hidden />
               {term}
             </span>
+            <button
+              type="button"
+              onClick={() => { setDrawer(false); setPalette(true); }}
+              className={cn(buttonClasses("secondary", "sm"), "max-sm:size-8 max-sm:px-0")}
+              aria-label="Search pages and common tasks"
+              title="Search pages (⌘ K)"
+            >
+              <Search aria-hidden />
+              <span className="hidden sm:inline">Jump to</span>
+              <kbd className="hidden rounded border border-line bg-surface px-1 font-mono text-[10px] text-ink-3 lg:inline">⌘ K</kbd>
+            </button>
             {approvalsHref && (
               <Link href={approvalsHref} className={buttonClasses("secondary", "sm", "relative")}>
                 <ShieldCheck className="text-ink-3" aria-hidden />

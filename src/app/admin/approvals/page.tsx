@@ -1,10 +1,10 @@
 import { ArrowRight, CalendarPlus, Check, ClipboardCheck, ShieldCheck, Ticket, TriangleAlert, X } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ConfirmAction } from "@/components/client";
+import { ActionForm, ConfirmAction, SubmitButton } from "@/components/client";
 import { BookingCard, BookingReviewActions, ChangeRequestCard, ChangeReviewActions, DisruptionSummary, ValidationPanel } from "@/components/domain";
-import { Badge, Card, EmptyState, PageHeader, StatCard, TabLinks } from "@/components/ui";
-import { applyDisruptionAction, rejectDisruptionAction } from "@/lib/actions";
+import { Badge, ButtonLink, Card, EmptyState, PageHeader, StatCard, TabLinks } from "@/components/ui";
+import { applyDisruptionAction, prepareApprovalDemoAction, rejectDisruptionAction } from "@/lib/actions";
 import { requireRole } from "@/lib/auth";
 import { DISRUPTION_TYPE_LABEL } from "@/lib/constants";
 import { buildBookingAnalyzer } from "@/lib/engine";
@@ -57,7 +57,25 @@ export default async function ApprovalCentrePage({ searchParams }: { searchParam
 
       {counts[tab] === 0 ? (
         <Card>
-          <EmptyState icon={ShieldCheck} title="Nothing waiting for approval" description="New booking requests, schedule changes and disruption plans will appear here." />
+          {total === 0 ? (
+            <EmptyState
+              icon={ShieldCheck}
+              title="Nothing waiting for approval"
+              description="New booking requests, schedule changes and disruption plans will appear here. You can prepare one real, conflict-free example to explore the complete decision flow."
+              action={
+                <ActionForm action={prepareApprovalDemoAction} className="inline-flex">
+                  <SubmitButton variant="secondary" pendingLabel="Preparing example…">Prepare approval example</SubmitButton>
+                </ActionForm>
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={ShieldCheck}
+              title={`No ${labels[tab].toLowerCase()} waiting`}
+              description={`${plural(total, "item")} remain in other approval categories.`}
+              action={<ButtonLink href="/admin/approvals" variant="secondary">View all pending</ButtonLink>}
+            />
+          )}
         </Card>
       ) : (
         <div className="space-y-8">

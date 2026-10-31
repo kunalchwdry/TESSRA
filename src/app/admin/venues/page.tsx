@@ -1,17 +1,18 @@
-import { Accessibility, Building, LayoutGrid, List, Plus, Search, Settings2, Users, Wrench } from "lucide-react";
+import { Accessibility, Building, CalendarCheck, LayoutGrid, List, Plus, Search, Settings2, Users, Wrench } from "lucide-react";
 import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
 import { ActionForm, AutoSubmitSelect, Dialog, DialogCancel, DialogFooter, FormField, SubmitButton } from "@/components/client";
 import { VenueCard } from "@/components/domain";
-import { Badge, Button, Card, Checkbox, EmptyState, Input, PageHeader, Select, StatCard, StatusBadge, Table, TableWrap, TD, TH, THead, TR, Textarea, buttonClasses } from "@/components/ui";
+import { Badge, Button, Callout, Card, Checkbox, EmptyState, Input, PageHeader, Select, StatCard, StatusBadge, Table, TableWrap, TD, TH, THead, TR, Textarea, buttonClasses } from "@/components/ui";
 import { createRoomAction, updateRoomStatusAction } from "@/lib/actions";
 import { requireRole } from "@/lib/auth";
+import { buildBookingAnalyzer } from "@/lib/engine";
 import { ROOM_FEATURES, ROOM_TYPE_LABEL, type RoomType } from "@/lib/constants";
 import type { RoomRow } from "@/db/schema";
 import { qs, readParams, type SearchParams } from "@/lib/params";
 import { getPublishedTimetable, getRef } from "@/lib/queries";
-import { cn, pct } from "@/lib/utils";
+import { cn, formatDateLong, isIsoDate, isValidTime, pct, toMinutes, todayIso } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Venues" };
 
@@ -58,6 +59,10 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
   const type = get("type") ?? "";
   const status = get("status") ?? "";
   const cap = Number(get("cap") ?? 0) || 0;
+  const date = get("date") ?? "";
+  const start = get("start") ?? "";
+  const end = get("end") ?? "";
+  const checking = isIsoDate(date) && isValidTime(start) && isValidTime(end) && toMinutes(end) > toMinutes(start);
   const view = get("view") === "table" ? "table" : "cards";
   const rooms = ref.rooms.filter(
     (r) =>
@@ -66,8 +71,16 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
       (!status || r.status === status) &&
       r.capacity >= cap,
   );
+  const analyzer = checking ? await buildBookingAnalyzer() : null;
+  const availability = (roomId: number) => {
+    if (!analyzer) return null;
+    const errors = analyzer.check({ roomId, date, startTime: start, endTime: end, attendees: cap || 1 }).filter((conflict) => conflict.severity === "error");
+    return errors.length ? { ok: false, reason: errors[0].message } : { ok: true };
+  };
+  const results = rooms.map((room) => ({ room, availability: availability(room.id) }));
+  if (checking) results.sort((a, b) => Number(b.availability?.ok) - Number(a.availability?.ok) || a.room.code.localeCompare(b.room.code));
   const util = (r: RoomRow) => pct(tt?.roomLoad.get(r.id) ?? 0, 40);
-  const params = { q: get("q"), type, status, cap: cap || undefined };
+  const params = { q: get("q"), type, status, cap: cap || undefined, date: date || undefined, start: start || undefined, end: end || undefined };
 
   const addVenue = (
     <Dialog
@@ -124,7 +137,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
 
   return (
     <>
-      <PageHeader eyebrow="Campus" title="Venues" description="Every teaching room, lab, hall and event space — capacity, features, accessibility and maintenance status." actions={addVenue} />
+      <PageHeader eyebrow="Campus" title="Venues" description="Find a free room by date, time and capacity, or manage every venue's features, accessibility and maintenance status." actions={addVenue} />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Venues" value={ref.rooms.length} icon={Building} />
@@ -134,34 +147,29 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
       </div>
 
       <Card className="mt-6 p-4 sm:p-5">
-        <Form action="/admin/venues" className="flex flex-wrap items-end gap-3" aria-label="Filter venues">
+        <div className="mb-3 flex items-center gap-2">
+          <CalendarCheck className="size-4 text-brand-600" aria-hidden />
+          <p className="text-[13px] font-semibold text-ink">Live room finder</p>
+          <span className="text-xs text-ink-3">Checks classes, exams and approved bookings</span>
+        </div>
+        <Form action="/admin/venues" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-[minmax(210px,1.5fr)_repeat(6,minmax(95px,.75fr))_auto_auto] xl:items-end" aria-label="Find and filter venues">
           <input type="hidden" name="view" value={view} />
-          <div className="min-w-0 flex-1 basis-60">
-            <label htmlFor="q" className="mb-1.5 block text-xs font-medium text-ink-2">
-              Search
-            </label>
+          <div className="sm:col-span-2 lg:col-span-4 xl:col-span-1">
+            <label htmlFor="q" className="mb-1.5 block text-xs font-medium text-ink-2">Search</label>
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
-              <Input id="q" name="q" defaultValue={get("q")} placeholder="Code, name, building or feature…" className="pl-9" />
+              <Input id="q" name="q" defaultValue={get("q")} placeholder="Code, building or feature…" className="pl-9" />
             </div>
           </div>
-          <div className="w-full sm:w-44">
-            <label htmlFor="type" className="mb-1.5 block text-xs font-medium text-ink-2">
-              Type
-            </label>
+          <div>
+            <label htmlFor="type" className="mb-1.5 block text-xs font-medium text-ink-2">Type</label>
             <AutoSubmitSelect id="type" name="type" defaultValue={type}>
               <option value="">All types</option>
-              {(Object.keys(ROOM_TYPE_LABEL) as RoomType[]).map((t) => (
-                <option key={t} value={t}>
-                  {ROOM_TYPE_LABEL[t]}
-                </option>
-              ))}
+              {(Object.keys(ROOM_TYPE_LABEL) as RoomType[]).map((t) => <option key={t} value={t}>{ROOM_TYPE_LABEL[t]}</option>)}
             </AutoSubmitSelect>
           </div>
-          <div className="w-full sm:w-40">
-            <label htmlFor="status" className="mb-1.5 block text-xs font-medium text-ink-2">
-              Status
-            </label>
+          <div>
+            <label htmlFor="status" className="mb-1.5 block text-xs font-medium text-ink-2">Status</label>
             <AutoSubmitSelect id="status" name="status" defaultValue={status}>
               <option value="">Any status</option>
               <option value="active">Active</option>
@@ -169,16 +177,24 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
               <option value="inactive">Inactive</option>
             </AutoSubmitSelect>
           </div>
-          <div className="w-full sm:w-32">
-            <label htmlFor="cap" className="mb-1.5 block text-xs font-medium text-ink-2">
-              Min. seats
-            </label>
-            <Input id="cap" name="cap" type="number" min={0} defaultValue={cap || ""} />
+          <div>
+            <label htmlFor="cap" className="mb-1.5 block text-xs font-medium text-ink-2">Min. seats</label>
+            <Input id="cap" name="cap" type="number" min={0} defaultValue={cap || ""} placeholder="Any" />
           </div>
-          <Button type="submit" variant="secondary">
-            Apply
-          </Button>
-          <div className="ml-auto flex rounded-lg border border-line p-0.5" role="group" aria-label="Layout">
+          <div>
+            <label htmlFor="date" className="mb-1.5 block text-xs font-medium text-ink-2">Date</label>
+            <Input id="date" name="date" type="date" min={todayIso()} defaultValue={date} />
+          </div>
+          <div>
+            <label htmlFor="start" className="mb-1.5 block text-xs font-medium text-ink-2">From</label>
+            <Input id="start" name="start" type="time" defaultValue={start} />
+          </div>
+          <div>
+            <label htmlFor="end" className="mb-1.5 block text-xs font-medium text-ink-2">To</label>
+            <Input id="end" name="end" type="time" defaultValue={end} />
+          </div>
+          <Button type="submit"><Search aria-hidden /> Find</Button>
+          <div className="flex w-fit rounded-lg border border-line p-0.5" role="group" aria-label="Layout">
             <Link href={qs("/admin/venues", { ...params, view: "cards" })} aria-label="Card view" aria-current={view === "cards" ? "true" : undefined} className={cn(buttonClasses("ghost", "icon-sm"), view === "cards" && "bg-brand-50 text-brand-700")}>
               <LayoutGrid aria-hidden />
             </Link>
@@ -189,18 +205,32 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
         </Form>
       </Card>
 
+      {checking ? (
+        <Callout tone="brand" className="mt-4" title={`Availability for ${formatDateLong(date)}, ${start}–${end}`}>
+          {results.filter((result) => result.availability?.ok).length} of {results.length} matching venues are free. Available rooms are listed first.
+        </Callout>
+      ) : (
+        (date || start || end) && <Callout tone="warning" className="mt-4">Enter a date plus a valid start and end time to run the live availability check.</Callout>
+      )}
+
       <p className="mb-3 mt-6 text-[13px] text-ink-2" aria-live="polite">
-        Showing {rooms.length} of {ref.rooms.length} venues
+        Showing {results.length} of {ref.rooms.length} venues{checking ? ` · ${results.filter((result) => result.availability?.ok).length} free` : ""}
       </p>
 
-      {!rooms.length ? (
+      {!results.length ? (
         <Card>
           <EmptyState icon={Search} title="No venues match these filters" description="Try a broader search or clear the filters." />
         </Card>
       ) : view === "cards" ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {rooms.map((r) => (
-            <VenueCard key={r.id} room={r} utilisation={["lecture", "lab", "seminar", "auditorium"].includes(r.type) ? util(r) : undefined} actions={<StatusDialog room={r} />} />
+          {results.map(({ room, availability: roomAvailability }) => (
+            <VenueCard
+              key={room.id}
+              room={room}
+              utilisation={["lecture", "lab", "seminar", "auditorium"].includes(room.type) ? util(room) : undefined}
+              availability={roomAvailability}
+              actions={<StatusDialog room={room} />}
+            />
           ))}
         </div>
       ) : (
@@ -215,6 +245,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
                   <TH>Features</TH>
                   <TH>Access</TH>
                   <TH className="text-right">Weekly use</TH>
+                  {checking && <TH>Availability</TH>}
                   <TH>Status</TH>
                   <TH className="text-right">
                     <span className="sr-only">Actions</span>
@@ -222,7 +253,7 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
                 </tr>
               </THead>
               <tbody>
-                {rooms.map((r) => (
+                {results.map(({ room: r, availability: roomAvailability }) => (
                   <TR key={r.id}>
                     <TD>
                       <p className="font-semibold">{r.code}</p>
@@ -235,6 +266,12 @@ export default async function VenuesPage({ searchParams }: { searchParams: Searc
                     <TD className="max-w-[220px] text-xs text-ink-2">{r.features.join(", ") || "—"}</TD>
                     <TD>{r.accessible ? <Badge tone="success" icon={Accessibility}>Step-free</Badge> : <Badge tone="neutral">Stairs only</Badge>}</TD>
                     <TD className="tabular text-right">{util(r)}%</TD>
+                    {checking && (
+                      <TD>
+                        {roomAvailability?.ok ? <Badge tone="success">Free</Badge> : <Badge tone="danger" title={roomAvailability?.reason}>Busy</Badge>}
+                        {!roomAvailability?.ok && <p className="mt-1 max-w-[220px] text-xs text-danger-fg">{roomAvailability?.reason}</p>}
+                      </TD>
+                    )}
                     <TD>
                       <StatusBadge status={r.status} />
                       {r.maintenanceNote && r.status !== "active" && <p className="mt-1 max-w-[200px] text-xs text-warning-fg">{r.maintenanceNote}</p>}
