@@ -1,15 +1,16 @@
-import { CalendarDays, ClipboardList, Download, FlaskConical, History, Play, ShieldCheck, Ticket, TriangleAlert, Wrench } from "lucide-react";
+import { ArrowRight, CalendarDays, CheckCircle2, ClipboardList, Download, FileJson, FlaskConical, History, Play, ShieldCheck, Ticket, TriangleAlert, Upload, Wrench, XCircle } from "lucide-react";
 import type { Metadata } from "next";
 import Form from "next/form";
 import Link from "next/link";
-import { AutoSubmitSelect, ActionForm, SubmitButton } from "@/components/client";
+import { AutoSubmitSelect, ActionForm, FieldError, SubmitButton } from "@/components/client";
 import { KIND_STYLE } from "@/components/timetable";
-import { Badge, Button, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, PageHeader, ProgressBar, StatCard, StatusBadge, TabLinks, Table, TableWrap, TD, TH, THead, TR } from "@/components/ui";
-import { desc } from "drizzle-orm";
+import { Badge, ButtonLink, Callout, Card, CardBody, CardHeader, EmptyState, Input, PageHeader, ProgressBar, StatCard, StatusBadge, TabLinks, Table, TableWrap, TD, TH, THead, TR } from "@/components/ui";
+import { desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { officialRuns, type OfficialRunRow } from "@/db/schema";
 import { requireRole } from "@/lib/auth";
-import { applyOfficialDisruptionAction, generateOfficialScheduleAction } from "@/lib/official-actions";
+import { approveOfficialRepairAction, generateOfficialScheduleAction, proposeOfficialRepairAction, rejectOfficialRepairAction } from "@/lib/official-actions";
+import { applyOfficialDisruptionForDisplay, getRepairWorkflow, stripRepairWorkflow } from "@/lib/official-disruption";
 import { effectiveCategory, getOfficialDataset, type OfficialDataset, type OfficialSchedule, type ValidatorReport } from "@/lib/official";
 import { qs, readParams, type SearchParams } from "@/lib/params";
 import { cn, formatRelative, pct } from "@/lib/utils";
@@ -187,16 +188,62 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
   const runs = await db.select().from(officialRuns).orderBy(desc(officialRuns.id)).limit(20);
   const run: OfficialRunRow | null = runs.find((r) => String(r.id) === get("run")) ?? runs[0] ?? null;
   const schedule = run ? (run.schedule as unknown as OfficialSchedule) : null;
-  const report = run ? (run.report as unknown as ValidatorReport) : null;
+  const workflow = getRepairWorkflow(run?.report);
+  const report = run ? stripRepairWorkflow(run.report) : null;
   const tab = (["timetable", "bookings", "exams"] as const).find((t) => t === get("tab")) ?? "timetable";
-  const baselineRun = runs.find((r) => r.kind === "schedule");
+  let baselineRun = workflow
+    ? runs.find((candidate) => candidate.id === workflow.baselineRunId) ?? null
+    : runs.find((candidate) => candidate.kind === "schedule") ?? null;
+  if (!baselineRun) {
+    const [fetchedBaseline] = workflow
+      ? await db.select().from(officialRuns).where(eq(officialRuns.id, workflow.baselineRunId)).limit(1)
+      : await db.select().from(officialRuns).where(eq(officialRuns.kind, "schedule")).orderBy(desc(officialRuns.id)).limit(1);
+    baselineRun = fetchedBaseline ?? null;
+  }
+  const displayData = applyOfficialDisruptionForDisplay(data, workflow?.disruption);
   const movedIds = new Set<string>();
   const addedIds = new Set<string>();
-  if (run?.kind === "disruption" && baselineRun) {
-    const base = new Map((baselineRun.schedule as unknown as OfficialSchedule).sessions.map((s) => [s.session_id, `${s.day}|${s.start_period}|${s.room_id}`]));
-    for (const s of schedule?.sessions ?? []) {
-      if (!base.has(s.session_id)) addedIds.add(s.session_id); // added by the change file — not a "move"
-      else if (base.get(s.session_id) !== `${s.day}|${s.start_period}|${s.room_id}`) movedIds.add(s.session_id);
+  const removedIds = new Set<string>();
+  const repairDiff: Array<{
+    sessionId: string;
+    course: string;
+    groups: string;
+    before: string;
+    after: string;
+    kind: "Time changed" | "Room only" | "Added" | "Removed";
+  }> = [];
+  if (run?.kind === "disruption" && baselineRun && schedule) {
+    const base = new Map((baselineRun.schedule as unknown as OfficialSchedule).sessions.map((placement) => [placement.session_id, placement]));
+    const after = new Map(schedule.sessions.map((placement) => [placement.session_id, placement]));
+    const sessions = new Map([...data.sessions, ...displayData.sessions].map((session) => [session.id, session]));
+    for (const sessionId of new Set([...base.keys(), ...after.keys()])) {
+      const from = base.get(sessionId);
+      const to = after.get(sessionId);
+      if (from && to && from.day === to.day && from.start_period === to.start_period && from.room_id === to.room_id) continue;
+      let kind: "Time changed" | "Room only" | "Added" | "Removed";
+      if (!from && to) {
+        kind = "Added";
+        addedIds.add(sessionId);
+      } else if (from && !to) {
+        kind = "Removed";
+        removedIds.add(sessionId);
+      } else if (from && to && from.day === to.day && from.start_period === to.start_period) {
+        kind = "Room only";
+        movedIds.add(sessionId);
+      } else {
+        kind = "Time changed";
+        movedIds.add(sessionId);
+      }
+      const session = sessions.get(sessionId);
+      const label = (placement: typeof from) => placement ? `${placement.day} P${placement.start_period} · ${placement.room_id}` : "—";
+      repairDiff.push({
+        sessionId,
+        course: session?.course_id ?? "—",
+        groups: session?.groups.join(" + ") ?? "—",
+        before: label(from),
+        after: label(to),
+        kind,
+      });
     }
   }
 
@@ -205,21 +252,13 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
       <SubmitButton icon={<Play />} pendingLabel="Solving with CP-SAT (up to 90s)…">Generate schedule</SubmitButton>
     </ActionForm>
   );
-  const repairBtn = (
-    <ActionForm action={applyOfficialDisruptionAction} className="inline-flex">
-      <SubmitButton variant="secondary" icon={<Wrench />} pendingLabel="Repairing (up to 90s)…" disabled={!baselineRun}>
-        Apply sample disruption
-      </SubmitButton>
-    </ActionForm>
-  );
-
   // timetable filter
   const view = (["group", "faculty", "room"] as const).find((v) => v === get("view")) ?? "group";
-  const options = view === "group" ? data.student_groups.map((g) => ({ id: g.id, label: `${g.id} · ${g.name}` }))
-    : view === "faculty" ? data.faculty.map((f) => ({ id: f.id, label: `${f.id} · ${f.name}` }))
-    : data.rooms.map((r) => ({ id: r.id, label: `${r.id} · ${r.name}` }));
+  const options = view === "group" ? displayData.student_groups.map((g) => ({ id: g.id, label: `${g.id} · ${g.name}` }))
+    : view === "faculty" ? displayData.faculty.map((f) => ({ id: f.id, label: `${f.id} · ${f.name}` }))
+    : displayData.rooms.map((r) => ({ id: r.id, label: `${r.id} · ${r.name}` }));
   const entityId = options.find((o) => o.id === get("id"))?.id ?? options[0]?.id ?? "";
-  const sessionMap = new Map(data.sessions.map((s) => [s.id, s]));
+  const sessionMap = new Map(displayData.sessions.map((s) => [s.id, s]));
   const placements = (schedule?.sessions ?? []).filter((p) => {
     const s = sessionMap.get(p.session_id);
     if (!s) return false;
@@ -242,7 +281,7 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
         eyebrow={`Crunch Week · ${data.institute} · ${data.dataset_id}`}
         title="Official Dataset (CIT)"
         description="The untouched official starter-pack dataset, solved by the OR-Tools CP-SAT engine and graded by the organisers' own validator. Exports are produced by the app, never by hand."
-        actions={<>{repairBtn}{generateBtn}</>}
+        actions={generateBtn}
         meta={
           <>
             {[["Rooms", data.rooms.length], ["Faculty", data.faculty.length], ["Groups", data.student_groups.length], ["Courses", data.courses.length], ["Sessions", data.sessions.length], ["Bookings", data.booking_requests.length], ["Exams", data.exams.length]].map(([k, v]) => (
@@ -251,6 +290,89 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
           </>
         }
       />
+
+      <Card className="mb-6">
+        <CardHeader
+          icon={Wrench}
+          title="Disruption repair workbench"
+          description="Upload the organiser change-file format, generate the minimum-move proposal, inspect every change, then approve or reject it separately."
+        />
+        <CardBody className="space-y-5">
+          {!baselineRun ? (
+            <Callout tone="warning" title="Generate a baseline first">
+              A repair is measured against the latest hard-valid official schedule.
+            </Callout>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+              <ActionForm action={proposeOfficialRepairAction} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end" aria-label="Upload disruption file">
+                <div>
+                  <label htmlFor="disruption" className="mb-1.5 block text-xs font-medium text-ink-2">Change file (.json)</label>
+                  <Input id="disruption" name="disruption" type="file" accept="application/json,.json" required />
+                  <FieldError name="disruption" />
+                  <p className="mt-1.5 text-xs text-ink-3">Same schema as `sample_disruption.json` · maximum 256 KB · validated before solving</p>
+                </div>
+                <SubmitButton icon={<Upload />} pendingLabel="Validating and solving (up to 2 min)…">
+                  Generate proposal
+                </SubmitButton>
+              </ActionForm>
+              <ActionForm action={proposeOfficialRepairAction} className="inline-flex">
+                <input type="hidden" name="useSample" value="true" />
+                <SubmitButton variant="secondary" icon={<FileJson />} pendingLabel="Solving sample…">
+                  Use supplied sample
+                </SubmitButton>
+              </ActionForm>
+            </div>
+          )}
+
+          {run?.kind === "disruption" && workflow && report && (
+            <div className="rounded-xl border border-line bg-subtle p-4 sm:p-5">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge tone={workflow.status === "approved" ? "success" : workflow.status === "rejected" ? "danger" : "warning"}>
+                      {workflow.status === "approved" ? "Approved and published" : workflow.status === "rejected" ? "Rejected" : "Awaiting Admin approval"}
+                    </Badge>
+                    <span className="text-xs font-medium text-ink-2">{workflow.sourceName}</span>
+                  </div>
+                  <p className="mt-2 text-sm font-semibold text-ink">
+                    Official validator: {report.hard_violation_count} hard violations · {report.stability?.sessions_moved ?? 0} existing sessions moved
+                  </p>
+                  <p className={cn("mt-1 text-xs font-semibold", schedule?.solver?.minimum_moves_proven ? "text-success" : "text-warning-fg")}>
+                    {schedule?.solver?.minimum_moves_proven
+                      ? `Minimum proven by CP-SAT: no hard-valid repair can move fewer than ${schedule.solver.minimum_moves ?? report.stability?.sessions_moved ?? 0} baseline session(s).`
+                      : "Minimum-move proof was not completed; do not approve this proposal as rubric evidence."}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-2">
+                    {workflow.disruption.description ?? `${workflow.disruption.changes.length} permanent change(s)`}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {Object.entries(workflow.summary).filter(([, count]) => count > 0).map(([type, count]) => (
+                      <Badge key={type} tone="outline">{count} {type.replaceAll("_", " ")}</Badge>
+                    ))}
+                  </div>
+                </div>
+                {workflow.status === "proposed" && (
+                  <div className="flex flex-wrap gap-2">
+                    <ActionForm action={rejectOfficialRepairAction} className="inline-flex">
+                      <input type="hidden" name="runId" value={run.id} />
+                      <SubmitButton variant="secondary" icon={<XCircle />} pendingLabel="Rejecting…">Reject proposal</SubmitButton>
+                    </ActionForm>
+                    <ActionForm action={approveOfficialRepairAction} className="inline-flex">
+                      <input type="hidden" name="runId" value={run.id} />
+                      <SubmitButton icon={<CheckCircle2 />} pendingLabel="Approving…">Approve and publish</SubmitButton>
+                    </ActionForm>
+                  </div>
+                )}
+              </div>
+              {workflow.status === "proposed" && (
+                <Callout tone="warning" className="mt-4" title="Nothing has been applied yet">
+                  The baseline and `schedule_after.json` remain unchanged until an Admin explicitly approves this validated proposal.
+                </Callout>
+              )}
+            </div>
+          )}
+        </CardBody>
+      </Card>
 
       {!run || !schedule || !report ? (
         <Card>
@@ -266,23 +388,75 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
           <Card>
             <div className="flex flex-col gap-3 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap items-center gap-2 text-[13px] text-ink-2">
-                <Badge tone={run.kind === "schedule" ? "brand" : "warning"}>{run.kind === "schedule" ? "Baseline schedule" : "After sample disruption"}</Badge>
+                <Badge tone={run.kind === "schedule" ? "brand" : workflow?.status === "approved" ? "success" : workflow?.status === "rejected" ? "danger" : "warning"}>
+                  {run.kind === "schedule" ? "Baseline schedule" : workflow?.status === "approved" ? "Approved repair" : workflow?.status === "rejected" ? "Rejected repair" : "Repair proposal"}
+                </Badge>
                 <span className="font-semibold text-ink">{run.label}</span>
                 <span>· {formatRelative(run.createdAt)}</span>
                 <StatusBadge status={report.hard_violation_count === 0 ? "approved" : "rejected"} />
               </div>
               <div className="flex flex-wrap gap-2">
-                <ButtonLink href={`/api/export/official?run=${run.id}`} variant="secondary" size="sm" prefetch={false}>
-                  <Download aria-hidden /> {run.kind === "disruption" ? "schedule_after.json" : "schedule.json"}
-                </ButtonLink>
-                <ButtonLink href={`/api/export/official?run=${run.id}&file=report`} variant="ghost" size="sm" prefetch={false}>
-                  <Download aria-hidden /> Validator report
-                </ButtonLink>
+                {(run.kind === "schedule" || workflow?.status === "approved") ? (
+                  <>
+                    <ButtonLink href={`/api/export/official?run=${run.id}`} variant="secondary" size="sm" prefetch={false}>
+                      <Download aria-hidden /> {run.kind === "disruption" ? "schedule_after.json" : "schedule.json"}
+                    </ButtonLink>
+                    <ButtonLink href={`/api/export/official?run=${run.id}&file=report`} variant="ghost" size="sm" prefetch={false}>
+                      <Download aria-hidden /> Validator report
+                    </ButtonLink>
+                  </>
+                ) : (
+                  <span className="rounded-lg bg-warning-bg px-3 py-2 text-xs font-semibold text-warning-fg">Export locked pending approval</span>
+                )}
               </div>
             </div>
           </Card>
 
           <ReportPanel report={report} schedule={schedule} />
+
+          {run.kind === "disruption" && baselineRun && (
+            <Card>
+              <CardHeader
+                icon={ArrowRight}
+                title="Exact repair diff"
+                description="Every changed, added or removed session compared with the baseline used by the solver"
+              />
+              <div className="grid grid-cols-2 border-b border-line sm:grid-cols-4">
+                {[
+                  ["Existing moved", report.stability?.sessions_moved ?? movedIds.size],
+                  ["Time changes", report.stability?.time_changed ?? repairDiff.filter((item) => item.kind === "Time changed").length],
+                  ["Room-only", report.stability?.room_only_changed ?? repairDiff.filter((item) => item.kind === "Room only").length],
+                  ["Added / removed", addedIds.size + removedIds.size],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="border-r border-line px-4 py-3 last:border-r-0">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-ink-3">{label}</p>
+                    <p className="mt-1 text-xl font-semibold tabular text-ink">{value}</p>
+                  </div>
+                ))}
+              </div>
+              {repairDiff.length ? (
+                <TableWrap>
+                  <Table className="min-w-[900px]">
+                    <THead><tr><TH>Session</TH><TH>Course / groups</TH><TH>Before</TH><TH></TH><TH>Proposed</TH><TH>Change</TH></tr></THead>
+                    <tbody>
+                      {repairDiff.map((item) => (
+                        <TR key={item.sessionId}>
+                          <TD className="font-semibold">{item.sessionId}</TD>
+                          <TD><p>{item.course}</p><p className="text-xs text-ink-2">{item.groups}</p></TD>
+                          <TD className="tabular text-ink-2">{item.before}</TD>
+                          <TD><ArrowRight className="size-4 text-ink-3" aria-hidden /></TD>
+                          <TD className="tabular font-medium">{item.after}</TD>
+                          <TD><Badge tone={item.kind === "Added" ? "success" : item.kind === "Removed" ? "danger" : item.kind === "Room only" ? "info" : "warning"}>{item.kind}</Badge></TD>
+                        </TR>
+                      ))}
+                    </tbody>
+                  </Table>
+                </TableWrap>
+              ) : (
+                <EmptyState icon={CheckCircle2} title="No existing session placements changed" description="The submitted changes required no timetable movement." compact />
+              )}
+            </Card>
+          )}
 
           <div>
             <TabLinks
@@ -319,7 +493,7 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
                 </Form>
               </div>
               <div className="p-2 sm:p-3">
-                {placements.length ? <OfficialGrid data={data} placements={placements} movedIds={movedIds} addedIds={addedIds} /> : <EmptyState icon={CalendarDays} title="No sessions for this selection" compact />}
+                {placements.length ? <OfficialGrid data={displayData} placements={placements} movedIds={movedIds} addedIds={addedIds} /> : <EmptyState icon={CalendarDays} title="No sessions for this selection" compact />}
               </div>
             </Card>
           )}
@@ -414,12 +588,13 @@ export default async function OfficialPage({ searchParams }: { searchParams: Sea
           <CardHeader icon={History} title="Run history" description="Every run is stored with its export and the validator's report" />
           <ul className="divide-y divide-line">
             {runs.map((r) => {
-              const rep = r.report as unknown as ValidatorReport;
+              const rep = stripRepairWorkflow(r.report);
+              const repairState = getRepairWorkflow(r.report)?.status;
               return (
                 <li key={r.id}>
                   <Link href={qs("/admin/official", { run: r.id })} className={cn("flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-[13px] transition-colors hover:bg-subtle", run?.id === r.id && "bg-brand-50/50")}>
                     <span className="flex items-center gap-2">
-                      <Badge tone={r.kind === "schedule" ? "brand" : "warning"}>{r.kind}</Badge>
+                      <Badge tone={r.kind === "schedule" ? "brand" : repairState === "approved" ? "success" : repairState === "rejected" ? "danger" : "warning"}>{r.kind === "schedule" ? "schedule" : repairState ?? "repair"}</Badge>
                       <span className="font-medium text-ink">{r.label}</span>
                       <span className="text-xs text-ink-3">{formatRelative(r.createdAt)}</span>
                     </span>

@@ -4,8 +4,12 @@
   "solver": {
     "status": "optimal",
     "objective": 3.0,
-    "wall_time": 20.57,
-    "sessions_moved_from_baseline": 8
+    "wall_time": 12.73,
+    "sessions_moved_from_baseline": 8,
+    "minimum_moves_proven": true,
+    "minimum_moves": 8,
+    "minimum_move_objective": "lexicographic",
+    "reasons": []
   },
   "sessions": [
     {
@@ -270,19 +274,19 @@
       "session_id": "CS202-T1",
       "day": "WED",
       "start_period": 5,
-      "room_id": "CR-103"
+      "room_id": "LH-1"
     },
     {
       "session_id": "CS202-T2",
       "day": "TUE",
-      "start_period": 6,
-      "room_id": "CR-104"
+      "start_period": 2,
+      "room_id": "CR-203"
     },
     {
       "session_id": "CS203-L1",
-      "day": "FRI",
-      "start_period": 6,
-      "room_id": "LH-2"
+      "day": "TUE",
+      "start_period": 1,
+      "room_id": "CR-201"
     },
     {
       "session_id": "CS203-L2",
@@ -528,7 +532,7 @@
       "session_id": "EC303-L3",
       "day": "WED",
       "start_period": 4,
-      "room_id": "CR-105"
+      "room_id": "LH-6"
     },
     {
       "session_id": "EC391-P1",
@@ -678,7 +682,7 @@
       "session_id": "EE303-L3",
       "day": "MON",
       "start_period": 5,
-      "room_id": "CR-105"
+      "room_id": "CR-205"
     },
     {
       "session_id": "EE391-P1",
@@ -726,7 +730,7 @@
       "session_id": "HS101-D-L1",
       "day": "TUE",
       "start_period": 3,
-      "room_id": "CR-101"
+      "room_id": "CR-201"
     },
     {
       "session_id": "HS101-D-L2",
@@ -948,7 +952,7 @@
       "session_id": "ME302-L3",
       "day": "THU",
       "start_period": 7,
-      "room_id": "LH-6"
+      "room_id": "CR-105"
     },
     {
       "session_id": "ME303-L1",

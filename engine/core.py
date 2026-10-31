@@ -163,13 +163,20 @@ class SolveResult:
     wall_time: float
     reasons: list[str]
     moved: list[str] = field(default_factory=list)
+    minimum_moves_proven: bool | None = None
+    minimum_moves: int | None = None
 
 
 def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float = 60.0,
                     workers: int = 2, move_penalty: int = 1000) -> SolveResult:
-    """Hard constraints are model constraints; soft S1–S6 form the objective with
-    the official weights. With a baseline, every changed placement costs
-    `move_penalty` so repairs move as few sessions as possible."""
+    """Solve the timetable with the official soft objective.
+
+    Repairs are lexicographic: first prove the smallest possible number of
+    baseline moves, then hold that count fixed while minimising S1–S6. The
+    legacy ``move_penalty`` argument is retained for API compatibility but no
+    longer approximates the priority between stability and soft quality.
+    """
+    del move_penalty
     import time
     t0 = time.time()
     ctx = Context(data)
@@ -349,8 +356,11 @@ def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float 
         m.Add(over >= sum(vs) - 1)
         obj_terms.append(3 * over)
 
-    # stability: repairs keep baseline placements unless forced to move
-    moved_vars = {}
+    # Stability is a true lexicographic objective. Placements made illegal by
+    # the disruption are forced moves; every still-legal baseline placement has
+    # a Boolean that is minimised in phase one. Only after that count is proven
+    # do we minimise the official S1–S6 objective.
+    moved_vars: dict[str, tuple[Any, tuple[str, int, str]]] = {}
     forced_moves = 0
     if baseline:
         base = {e["session_id"]: (e["day"], e["start_period"], e["room_id"]) for e in baseline.get("sessions", [])}
@@ -359,33 +369,98 @@ def solve_timetable(data: dict, baseline: dict | None = None, time_limit: float 
                 continue
             if place in z[sid]:
                 mv = m.NewBoolVar(f"moved|{sid}")
-                m.Add(mv >= 1 - z[sid][place])
-                obj_terms.append(move_penalty * mv)
+                m.Add(mv == 1 - z[sid][place])
                 moved_vars[sid] = (mv, place)
+                m.AddHint(z[sid][place], 1)
             else:
-                forced_moves += 1  # baseline slot became illegal — this session must move
+                forced_moves += 1
 
-    m.Minimize(sum(obj_terms))
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = float(time_limit)
-    solver.parameters.num_search_workers = workers
-    solver.parameters.random_seed = 42  # stable tie-breaking; parallel search may still vary
-    status = solver.Solve(m)
-    name = {cp_model.OPTIMAL: "optimal", cp_model.FEASIBLE: "feasible",
-            cp_model.INFEASIBLE: "infeasible", cp_model.MODEL_INVALID: "unknown"}.get(status, "unknown")
-    if name in ("optimal", "feasible"):
+    status_names = {
+        cp_model.OPTIMAL: "optimal",
+        cp_model.FEASIBLE: "feasible",
+        cp_model.INFEASIBLE: "infeasible",
+        cp_model.MODEL_INVALID: "unknown",
+    }
+
+    def new_solver(limit: float):
+        configured = cp_model.CpSolver()
+        configured.parameters.max_time_in_seconds = max(1.0, float(limit))
+        configured.parameters.num_search_workers = workers
+        configured.parameters.random_seed = 42
+        return configured
+
+    def read_solution(active_solver, status_name: str, objective: float | None,
+                      minimum_proven: bool | None, minimum_count: int | None,
+                      reasons: list[str] | None = None):
         assign = {}
         for sid, combos in z.items():
-            for (day, st, rid), v in combos.items():
-                if solver.Value(v):
+            for (day, st, rid), var in combos.items():
+                if active_solver.Value(var):
                     assign[sid] = (day, st, rid)
                     break
-        moved = [sid for sid, (mv, _p) in moved_vars.items() if solver.Value(mv)]
+        moved = [sid for sid, (var, _place) in moved_vars.items() if active_solver.Value(var)]
         moved += [f"(forced){i}" for i in range(forced_moves)]
-        return SolveResult(name, assign, solver.ObjectiveValue(), time.time() - t0, [], moved)
+        return SolveResult(status_name, assign, objective, time.time() - t0, reasons or [], moved,
+                           minimum_proven, minimum_count)
+
+    soft_objective = sum(obj_terms)
+    minimum_proven: bool | None = True if baseline and not moved_vars else None
+    minimum_count: int | None = forced_moves if baseline and not moved_vars else None
+
+    move_solver = None
+    if baseline and moved_vars:
+        move_expression = sum(var for var, _place in moved_vars.values())
+        m.Minimize(move_expression)
+        move_limit = min(45.0, max(1.0, float(time_limit) * 0.35))
+        move_solver = new_solver(move_limit)
+        move_status = move_solver.Solve(m)
+        move_name = status_names.get(move_status, "unknown")
+        if move_name not in ("optimal", "feasible"):
+            hint = ["CP-SAT proved no repair satisfies all hard constraints." if move_name == "infeasible"
+                    else "Solver stopped before finding a repair; raise the time limit."]
+            return SolveResult(move_name, {}, None, time.time() - t0, hint, [], False, None)
+        optional_moves = sum(move_solver.Value(var) for var, _place in moved_vars.values())
+        minimum_count = forced_moves + optional_moves
+        minimum_proven = move_name == "optimal"
+        if not minimum_proven:
+            return read_solution(
+                move_solver,
+                "feasible",
+                None,
+                False,
+                minimum_count,
+                ["A hard-valid repair was found, but the minimum move count was not proven within the time limit."],
+            )
+        m.Add(move_expression == optional_moves)
+        # Seed phase two with the proven phase-one repair. This guarantees a
+        # feasible incumbent quickly even when soft optimisation is expensive.
+        m.ClearHints()
+        for combos in z.values():
+            for var in combos.values():
+                if move_solver.Value(var):
+                    m.AddHint(var, 1)
+
+    m.Minimize(soft_objective)
+    remaining = max(5.0, float(time_limit) - (time.time() - t0))
+    solver = new_solver(remaining)
+    status = solver.Solve(m)
+    name = status_names.get(status, "unknown")
+    if name in ("optimal", "feasible"):
+        if baseline and minimum_count is None:
+            minimum_count = forced_moves + sum(solver.Value(var) for var, _place in moved_vars.values())
+        return read_solution(solver, name, solver.ObjectiveValue(), minimum_proven, minimum_count)
+    if move_solver is not None and minimum_proven:
+        return read_solution(
+            move_solver,
+            "feasible",
+            None,
+            True,
+            minimum_count,
+            ["The minimum move count was proven; soft-objective refinement reached its time limit."],
+        )
     hint = ["CP-SAT proved no assignment satisfies all hard constraints." if name == "infeasible"
             else "Solver stopped before proving feasibility; raise the time limit."]
-    return SolveResult(name, {}, None, time.time() - t0, hint)
+    return SolveResult(name, {}, None, time.time() - t0, hint, [], minimum_proven, minimum_count)
 
 
 # --------------------------------------------------------------------------- independent hard check
@@ -742,7 +817,9 @@ def build_schedule(data: dict, team: str = "TESSRA", time_limit: float = 60.0,
     if result.status not in ("optimal", "feasible"):
         return {"team": team, "dataset_id": data.get("dataset_id"),
                 "solver": {"status": result.status, "reasons": result.reasons,
-                           "wall_time": round(result.wall_time, 2)},
+                           "wall_time": round(result.wall_time, 2),
+                           "minimum_moves_proven": result.minimum_moves_proven,
+                           "minimum_moves": result.minimum_moves},
                 "sessions": []}
     if include_fest is None:
         include_fest = baseline is None
@@ -753,7 +830,11 @@ def build_schedule(data: dict, team: str = "TESSRA", time_limit: float = 60.0,
         "dataset_id": data.get("dataset_id"),
         "solver": {"status": result.status, "objective": result.objective,
                    "wall_time": round(result.wall_time, 2),
-                   "sessions_moved_from_baseline": len(result.moved) if baseline else None},
+                   "sessions_moved_from_baseline": len(result.moved) if baseline else None,
+                   "minimum_moves_proven": result.minimum_moves_proven,
+                   "minimum_moves": result.minimum_moves,
+                   "minimum_move_objective": "lexicographic" if baseline else None,
+                   "reasons": result.reasons},
         "sessions": [{"session_id": sid, "day": d, "start_period": st, "room_id": rid}
                      for sid, (d, st, rid) in sorted(result.assignment.items())],
     }

@@ -34,11 +34,20 @@ Verified against the organiser-provided `official/starterpack/CrunchWeek_Starter
 | S5 | 1 when room use is below 40% | assignment cost when `size / capacity < 0.4` | combined S5/S6 test |
 | S6 | 1 for a session occupying P9 | assignment cost when its period block contains P9 | combined S5/S6 test |
 
+## Repair objective proof
+
+Repair solving is lexicographic rather than a tunable weighted sum:
+
+1. Keep forced moves as a lower bound and minimize the Boolean count of every other changed baseline placement.
+2. Require CP-SAT `OPTIMAL` status for that phase; this proves no hard-valid repair has fewer moves.
+3. Add equality fixing that optimum, then minimize the exact S1–S6 expression.
+4. Persist `minimum_moves` and `minimum_moves_proven` in the ignored solver metadata; Admin approval is blocked unless the proof flag is true.
+
 ## Executed evidence
 
 ```text
 python -m pytest engine/tests -q
-31 passed
+33 passed
 
 schedule.json
   189/189 sessions · 41/41 exams
@@ -50,14 +59,15 @@ schedule.json
 schedule_after.json + sample_disruption.json + schedule.json baseline
   190/190 sessions
   hard violations 0 · soft 3
-  8 sessions moved: 2 time changes, 6 room-only changes
+  lexicographic minimum proven: 8 sessions moved (2 time changes, 6 room-only changes)
+  no hard-valid repair can move fewer than 8 baseline sessions
 ```
 
 SHA-256 fingerprints of the validated artifacts:
 
 ```text
 ccb344cf1e8d1c3e992c07828e8649031e4c2357d5e9923fd469f7c7eb32268b  exports/schedule.json
-82580268215b5f43a91e50d1ceff391fbd23cc3d231ff85d7e9770e4e7aa018c  exports/schedule_after.json
+eecb64b67d376ab0e78ce704feac0bbaf64cdef273060db50ac866da39701943  exports/schedule_after.json
 b6ccc02574efb301e211d5a0cf15fabe58dab98a5df2352f36ebd64a59722a52  exports/report.json
 1be2a0efec75e0ec7bdeb1228a39697977cde79c554bfa698d2545f06a127bb2  exports/report_after.json
 ```

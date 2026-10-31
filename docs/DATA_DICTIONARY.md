@@ -47,7 +47,7 @@ Basket semantics: all sessions sharing `basket_slot` (OEB-1/2/3) run at the same
 ## 2. Export format (produced by the app into `exports/` and per-run in the DB)
 
 `schedule.json`: `{team, dataset_id, sessions[{session_id, day, start_period, room_id}], fest_week{bookings[{request_id, status, day, start_period, end_period(inclusive), room_id, reason}], session_overrides[{session_id, day, start_period, room_id, displaced_by}]}, exams[{exam_id, day, session, rooms[]}]}` + a non-standard `solver` info block (validator ignores unknown keys).
-`schedule_after.json`: same, exams/fest optional, produced with `--disruption --baseline`.
+`schedule_after.json`: same, exams/fest optional, produced with `--disruption --baseline`. Its ignored `solver` block also records `minimum_move_objective: "lexicographic"`, `minimum_moves`, and `minimum_moves_proven`.
 
 ## 3. Application database (PostgreSQL via Drizzle, `src/db/schema.ts`)
 
@@ -62,7 +62,9 @@ Official pipeline: **`official_runs`**
 | dataset_id | text | `cit-public-v1` |
 | created_by_id | FK users | Admin who ran it |
 | schedule | jsonb | the exact exported schedule.json content |
-| report | jsonb | the official validator's JSON report, unedited |
+| report | jsonb | official validator JSON; repair rows additionally carry a namespaced internal `_workflow` proposal/approval record |
 | created_at | timestamptz | |
 
-Audit: every official run also writes an `audit_logs` row (`official.generated`, `official.disruption_applied`) with the validator's headline numbers.
+`_workflow` is never emitted in downloads: the export route strips it from approved reports and blocks proposed/rejected repair exports. This avoids a production schema migration while keeping the organiser JSON clean.
+
+Audit events: `official.generated`, `official.disruption_proposed`, `official.disruption_approved`, and `official.disruption_rejected`, each with the validator headline and source filename where relevant.

@@ -267,6 +267,34 @@ def test_apply_disruption_matches_official_semantics():
     assert data["faculty"][0]["unavailable"] == []  # original untouched
 
 
+def test_repair_lexicographically_proves_zero_optional_moves():
+    """An added session can use another slot, so moving the baseline is never
+    allowed merely to improve soft quality. CP-SAT must prove that lower bound."""
+    original = dataset(sessions=[sess("S1")])
+    baseline = {"sessions": [{"session_id": "S1", "day": "MON", "start_period": 1, "room_id": "R1"}]}
+    changed = apply_disruption(original, {"changes": [{"type": "add_session", "session": sess("S2")}]})
+    result = build_schedule(changed, baseline=baseline, time_limit=8, workers=2)
+    assert result["solver"]["status"] in ("optimal", "feasible")
+    assert result["solver"]["minimum_move_objective"] == "lexicographic"
+    assert result["solver"]["minimum_moves_proven"] is True
+    assert result["solver"]["minimum_moves"] == 0
+    placements = {item["session_id"]: item for item in result["sessions"]}
+    assert (placements["S1"]["day"], placements["S1"]["start_period"], placements["S1"]["room_id"]) == ("MON", 1, "R1")
+
+
+def test_repair_lexicographically_proves_a_required_optional_move():
+    """The new fixed session takes the old slot. The old placement is still
+    individually legal, so phase one must reason about the clash and prove one move."""
+    original = dataset(sessions=[sess("S1")])
+    baseline = {"sessions": [{"session_id": "S1", "day": "MON", "start_period": 1, "room_id": "R1"}]}
+    added = sess("S2", fixed={"day": "MON", "start_period": 1})
+    changed = apply_disruption(original, {"changes": [{"type": "add_session", "session": added}]})
+    result = build_schedule(changed, baseline=baseline, time_limit=8, workers=2)
+    assert result["solver"]["minimum_moves_proven"] is True
+    assert result["solver"]["minimum_moves"] == 1
+    placements = {item["session_id"]: item for item in result["sessions"]}
+    assert (placements["S1"]["day"], placements["S1"]["start_period"], placements["S1"]["room_id"]) != ("MON", 1, "R1")
+
 # ------------------------------------------------------------------ official end-to-end
 def test_service_validator_copy_is_byte_identical_to_official_file():
     """The deployed Python service must grade with the organiser file, not a rewrite."""
@@ -309,8 +337,11 @@ def test_official_dataset_passes_official_validator(tmp_path):
                     "--schedule", str(after), "--disruption", str(PACK / "examples/sample_disruption.json"),
                     "--baseline", str(out), "--json", str(rep2_path), "--quiet"], check=True, capture_output=True)
     rep2 = json.loads(rep2_path.read_text())
+    repaired = json.loads(after.read_text())
     assert rep2["hard_violation_count"] == 0, rep2["hard_violations"][:10]
-    assert rep2["stability"]["sessions_moved"] <= 20
+    assert repaired["solver"]["minimum_move_objective"] == "lexicographic"
+    assert repaired["solver"]["minimum_moves_proven"] is True
+    assert repaired["solver"]["minimum_moves"] == rep2["stability"]["sessions_moved"] == 8
 
 
 # ------------------------------------------------------------------ regression: booking/override bugs

@@ -35,7 +35,7 @@ export type OfficialDataset = {
   role_category_cap: Record<string, string>;
   rooms: { id: string; name: string; building: string; type: string; capacity: number; features: string[]; accessible: boolean; allowed_uses: string[] }[];
   room_unavailability: { room_id: string; day: string; periods: number[]; reason?: string }[];
-  faculty: { id: string; name: string; department: string; max_hours_per_day: number; unavailable: { day: string; periods: number[] }[]; preferences: unknown[] }[];
+  faculty: { id: string; name: string; department: string; max_hours_per_day: number; needs_accessible: boolean; unavailable: { day: string; periods: number[]; reason?: string }[]; preferences: unknown[] }[];
   student_groups: { id: string; name: string; year: number; department: string; size: number }[];
   courses: { id: string; title?: string; name?: string }[];
   sessions: { id: string; course_id: string; kind: "lecture" | "tutorial" | "lab"; groups: string[]; faculty_id: string; size: number; duration: number; room_types: string[]; needs_accessible: boolean; basket_slot: string | null; fixed_slot: { day: string; start_period: number } | null }[];
@@ -55,7 +55,16 @@ export type OfficialBookingRequest = {
 export type OfficialSchedule = {
   team: string;
   dataset_id: string;
-  solver?: { status: string; objective?: number | null; wall_time?: number; reasons?: string[]; sessions_moved_from_baseline?: number | null };
+  solver?: {
+    status: string;
+    objective?: number | null;
+    wall_time?: number;
+    reasons?: string[];
+    sessions_moved_from_baseline?: number | null;
+    minimum_moves_proven?: boolean | null;
+    minimum_moves?: number | null;
+    minimum_move_objective?: "lexicographic" | null;
+  };
   sessions: { session_id: string; day: string; start_period: number; room_id: string }[];
   fest_week?: {
     bookings: { request_id: string; status: "approved" | "rejected" | "alternative_offered"; day?: string; start_period?: number; end_period?: number; room_id?: string; reason?: string }[];

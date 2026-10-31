@@ -206,7 +206,8 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 - **Timetable/booking validation** — conflict-checked with suggested alternatives
 - **English/Hinglish booking intake** — fills the real editable form, exposes assumptions, asks for missing essentials and revalidates on submit
 - **Faculty AI schedule assistant** — optional LLM intent proposal, deterministic constraint validation, human submission and coordinator approval
-- **CP-SAT engine** — exact H1–H14 model and S1–S6 objective, official booking/exam allocation and minimal-move repair
+- **CP-SAT engine** — exact H1–H14 model and S1–S6 objective, official booking/exam allocation, and a lexicographic repair that proves the minimum number of baseline moves before optimizing soft quality
+- **Governed repair workflow** — upload any valid organiser change JSON, inspect the exact before/after diff, then approve or reject it; `schedule_after.json` stays locked until approval
 - **Safe Admin reset** — one-click clean demo state with complete timetable regeneration; accounts/reference data and the active login are preserved
 - **Demo accounts** — four pre-seeded accounts for evaluation
 
@@ -215,7 +216,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 ## Known limitations
 
 - The four role workspaces use a compact seeded campus dataset for fast judging; the full official CIT dataset, bookings, exams, validator report and disruption repair are presented under `/admin/official`.
-- The committed official workflow loads the organiser-provided CIT dataset and sample disruption. Uploading an arbitrary replacement dataset/change file is not yet exposed in the UI.
+- The official workflow intentionally fixes the organiser-provided CIT dataset as the grading source. Admins can upload arbitrary organiser-format disruption JSON (all five supported change types); replacement base-dataset upload is not exposed.
 - Production deploys the included FastAPI/OR-Tools engine as a private Vercel Python Service and injects `ENGINE_URL` through a service binding. Local development can use that URL or the Python subprocess fallback.
 - External LLM intent parsing is optional and requires a team-supplied key. The deterministic assistant, English/Hinglish booking parser and manual booking form work without it.
 

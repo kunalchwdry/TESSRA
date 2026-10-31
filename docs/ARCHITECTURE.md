@@ -48,4 +48,6 @@
 - Official priority, caps, cancellations and windows are read from the dataset — never hardcoded rankings.
 - Bookings are allocated in strict priority order, so priority inversions are structurally avoided (validator confirms 0).
 - Only institute events may displace classes, and every displaced session must pass `check_assignment` in its new slot before the override is emitted.
-- Repairs add a large per-move penalty against the baseline, so CP-SAT itself minimises disruption.
+- Repairs use two CP-SAT phases: first minimize and prove the baseline-move count; then constrain that count to its optimum and minimize S1–S6. This is lexicographic, not an approximate weighted penalty.
+- Uploaded change JSON is schema/reference-validated in the Next.js boundary before the private engine is called. All five organiser change types are supported.
+- A repair row carries namespaced internal workflow metadata (`proposed`, `approved`, or `rejected`) inside its stored validator report. Export strips that metadata; proposal/rejection exports return HTTP 409, so only a separately approved Admin action can publish `schedule_after.json`.

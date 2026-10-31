@@ -5,9 +5,9 @@ All commands below were executed in the sandbox; headline results are recorded. 
 ## 1. Scheduling engine (pytest)
 ```
 python3 -m pytest engine/tests -q
-→ 31 passed
+→ 33 passed
 ```
-Covers: H1 missing/unknown sessions; H2/H3/H4 clashes; H5 capacity; H6 room type; H7 faculty unavailability; H8 room unavailability; H9 lab starts + lunch; H10 accessibility; H11 baskets; H12 daily limits; H13 booking clashes/mandatory groups; H14 fixed slots; individual S1–S6 objective weights; infeasibility explanations; booking role caps, tiebreaks, cancellations and rejection reasons; exam half-capacity/multi-room/group clashes; disruption semantics; the validated FastAPI response boundary; byte equality of the deployed and organiser validator files; and the **official end-to-end test** (solve → official validator → 0 hard; repair → 0 hard and minimal moves).
+Covers: H1 missing/unknown sessions; H2/H3/H4 clashes; H5 capacity; H6 room type; H7 faculty unavailability; H8 room unavailability; H9 lab starts + lunch; H10 accessibility; H11 baskets; H12 daily limits; H13 booking clashes/mandatory groups; H14 fixed slots; individual S1–S6 objective weights; infeasibility explanations; booking role caps, tiebreaks, cancellations and rejection reasons; exam half-capacity/multi-room/group clashes; disruption semantics; **lexicographic proof that optional moves cannot improve soft quality**; the validated FastAPI response boundary; byte equality of the deployed and organiser validator files; and the official end-to-end test (solve → official validator → 0 hard; repair → 0 hard and minimum moves).
 
 ## 2. Official validator (the organisers' file, unmodified)
 ```
@@ -27,20 +27,21 @@ python3 official/.../validator.py --data ... --schedule exports/schedule_after.j
     --disruption ... --baseline exports/schedule.json --json exports/report_after.json
 → Hard violations: 0  {}
 → Soft penalty: 3 (optimal) · Stability: 8 sessions moved (2 changed time, 6 room only)
-  Repair objective = 3.0 ⇒ zero discretionary moves; all 8 are forced by the change file
+→ solver.minimum_moves = 8 · solver.minimum_moves_proven = true
+  Phase 1 proves zero discretionary moves (all 8 are forced); phase 2 reaches S1–S6 optimum 3 at that fixed count
 ```
 Rejections are legitimate: BR-04 is on the official cancellations list; BR-09 needs 1,200 seats and the largest matching venue holds 800.
 
 ## 3. Web application
 ```
-npm run test:parser         → 7/7 parser/date-boundary tests passed
+npm run test:unit           → 14/14 tests passed (7 booking parser + 7 disruption/workflow tests)
 npm run typecheck           → 0 errors
 npm run lint                → 0 problems
 npm run build               → all routes compiled (Next.js 16.4.3 App Router)
 npm audit --omit=dev        → 0 production vulnerabilities
 ```
 
-Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions, missing-value follow-ups and the UTC-to-Asia/Kolkata date boundary used on serverless hosts.
+Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`, hyphenated duration, recurrence warnings, visible vague-time assumptions, missing-value follow-ups and the UTC-to-Asia/Kolkata date boundary used on serverless hosts. Disruption tests cover the supplied sample, all five supported change types, references to newly added entities, wrong-dataset files, unknown entities/types/fields, and malformed added sessions.
 
 ## 4. Runtime & security checks (executed against production)
 - Every route of all four roles → HTTP 200 with real data; anon → `/login`; wrong role → own workspace; exports 403 for unauthorized roles.
