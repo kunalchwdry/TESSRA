@@ -49,6 +49,8 @@ Parser tests cover English ranges, Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`,
 - Admin reset regenerated 60/60 demo sessions and preserved the active session/accounts.
 - Production `/admin/official` generated 189/189 sessions and 41/41 exams through the private Python service, stored the run and displayed **0 hard violations**.
 - The generated schedule and report were downloaded from production. Running the organiser's original validator locally returned 0 hard violations, and its JSON report was data-identical to the report stored by the live app.
+- Criterion-2 production flow on commit `0c88b22`: unsupported change type rejected before solve; a browser-uploaded `judge-supplied-change.json` became proposal run 2 with 0 hard violations and a proven 12-move minimum; proposal export returned 409; rejection was recorded and remained 409. A fresh sample proposal became run 3, again proved minimum 12, then a separate approval published both exports with HTTP 200. The downloaded report contained no `_workflow` metadata.
+- Independent execution of the untouched organiser validator on production run 3 plus production baseline run 1 returned **0 hard · soft 12 · 12 moved (7 time, 5 room-only)**, and its JSON was data-identical to the approved app report. Headless Chromium recorded zero console/page errors; proposal/rejection/approval entries were visible in the Admin audit log.
 - Sign-in browser matrix (headless Chromium, Firefox, WebKit): normal tab ✅, embedded preview ✅ (partitioned cookies), strict-privacy/blocked contexts → direct-link panel with copyable address ✅, sandboxed panel → explained ✅. Sign-out and session invalidation verified.
 - Login route: cross-site POST → 403; wrong password → 401 with field error.
 

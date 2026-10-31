@@ -41,6 +41,20 @@ Executed against `exports/schedule.json` and checked with the untouched organise
 
 Therefore all eight moves are unavoidable under the submitted permanent unavailability changes; no discretionary movement is used to improve the soft score.
 
+## Deployed end-to-end result
+
+Headless Chromium exercised the production deployment for commit `0c88b22` through the real forms, Server Actions, database, private Python service, and authenticated export route:
+
+- An unsupported change type was rejected before solving.
+- Browser-uploaded `judge-supplied-change.json` produced proposal run 2: 0 hard violations, exact diff visible, minimum 12 proven against production baseline run 1, export HTTP 409.
+- Rejecting run 2 kept its export at HTTP 409 and produced an audit entry.
+- A fresh sample proposal produced run 3; before approval its export returned HTTP 409.
+- A separate Admin approval published run 3: schedule/report HTTP 200, 190 sessions, 0 hard violations, minimum 12 proven, internal `_workflow` absent from the downloaded report.
+- The untouched organiser validator independently rechecked the downloaded production files: **0 hard · soft 12 · 12 moved (7 time, 5 room-only)**. Its report was data-identical to the app download.
+- The browser recorded zero console or page errors; the audit page showed the workflow events.
+
+The production baseline differs from the committed soft-optimal baseline, so its proven lower bound is 12 rather than 8. Both results are exact relative to their own exported baseline.
+
 ## Automated checks
 
 - `python -m pytest engine/tests -q` → **33 passed**
