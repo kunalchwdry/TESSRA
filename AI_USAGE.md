@@ -8,8 +8,8 @@ This declaration is provided for the official problem statement §6.
 
 The faculty page at `/faculty/assistant` has two layers:
 
-1. **Optional LLM interpretation** (`src/lib/llm.ts`) converts a natural-language request into a tightly validated JSON intent: request type, course code, source/target day, periods, room kind and minimum capacity.
-2. **Deterministic scheduling code** (`src/lib/assistant.ts`, `src/lib/scheduler.ts`, `src/lib/engine.ts`) reads live database state, searches alternatives and validates every proposed placement.
+1. **Optional LLM interpretation** (`src/lib/llm.ts`) converts a natural-language request into a tightly validated JSON intent: request type (including placement explanations), course code, source/target day, periods, room kind and minimum capacity.
+2. **Deterministic scheduling code** (`src/lib/assistant.ts`, `src/lib/scheduler.ts`, `src/lib/engine.ts`) reads live database state, searches alternatives, explains verified placement facts and validates every proposed placement.
 
 Supported optional providers:
 
@@ -27,7 +27,7 @@ The runtime system prompt and schema are committed in:
 
 ### Plain-language venue intake
 
-The English/Hinglish venue-request parser (`src/lib/booking-parser.ts`) is deterministic and does not call an external model. It extracts an editable draft, makes assumptions visible, asks for missing essentials, checks role ceilings, and proposes a compatible venue. Submission still runs the ordinary server-side booking validator.
+The English/Hinglish venue-request parser (`src/lib/booking-parser.ts`) is deterministic and does not call an external model. It understands numeric and common Romanised-Hindi number words, flexible/vague windows, explicit constraints, recurring wording, equipment negation and ordered venue fallbacks. It extracts an editable draft, makes assumptions visible, asks for missing essentials, calls out conditions, rejects priority impersonation/bypass wording, enforces role ceilings, and proposes a compatible conflict-free venue. Submission still runs the ordinary server-side booking validator.
 
 ## 2. What an LLM is not allowed to decide
 

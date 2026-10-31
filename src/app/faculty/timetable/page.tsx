@@ -1,4 +1,4 @@
-import { CalendarDays, ClipboardCheck } from "lucide-react";
+import { CalendarDays, ClipboardCheck, MessageCircleQuestion } from "lucide-react";
 import type { Metadata } from "next";
 import { Timetable, TimetableLegend } from "@/components/timetable";
 import { ButtonLink, Card, EmptyState, PageHeader } from "@/components/ui";
@@ -17,6 +17,12 @@ export default async function FacultyTimetablePage() {
   const periods = mine.reduce((n, s) => n + s.duration, 0);
   const days = DAY_SHORT.filter((_, i) => mine.some((s) => s.day === i));
   const conflicts = mine.filter((s) => tt?.issuesBySession[s.id]?.length).length;
+  const explainHref = (id: number) => {
+    const session = mine.find((item) => item.id === id);
+    if (!session) return "/faculty/assistant";
+    const question = `Why is my ${session.courseCode} class on ${DAY_SHORT[session.day]} at P${session.startPeriod}?`;
+    return `/faculty/assistant?q=${encodeURIComponent(question)}`;
+  };
 
   return (
     <>
@@ -42,12 +48,19 @@ export default async function FacultyTimetablePage() {
       />
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
-          <h2 className="text-[15px] font-semibold text-ink">Weekly schedule</h2>
+          <div>
+            <h2 className="text-[15px] font-semibold text-ink">Weekly schedule</h2>
+            {mine.length > 0 && (
+              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-ink-2">
+                <MessageCircleQuestion className="size-3.5 text-brand-600" aria-hidden /> Select a class to ask why it was placed there.
+              </p>
+            )}
+          </div>
           <TimetableLegend showUnavailable />
         </div>
         <div className="p-2 sm:p-3">
           {mine.length ? (
-            <Timetable sessions={mine} issuesBySession={tt?.issuesBySession} blocks={blocks} show={{ faculty: false }} label="My weekly timetable" />
+            <Timetable sessions={mine} issuesBySession={tt?.issuesBySession} blocks={blocks} hrefFor={explainHref} show={{ faculty: false }} label="My weekly timetable" />
           ) : (
             <EmptyState icon={CalendarDays} title="No sessions assigned" description="Once a timetable is published, your classes appear here." />
           )}

@@ -4,7 +4,7 @@ The production prompt is exported as `FACULTY_ASSISTANT_SYSTEM_PROMPT` from `src
 
 ## Purpose
 
-The optional LLM is an **untrusted natural-language interpretation layer**. It classifies a faculty request and extracts course/day/period/capacity preferences into a small JSON object.
+The optional LLM is an **untrusted natural-language interpretation layer**. It classifies a faculty request and extracts course/day/period/capacity preferences into a small JSON object. The `explain` intent identifies a published placement; deterministic code then reports verified hard-constraint facts and alternative availability.
 
 It may suggest a requested destination, but it cannot:
 
@@ -20,7 +20,7 @@ The deterministic scheduler searches and validates alternatives after parsing. A
 
 ```json
 {
-  "intent": "schedule | free_room | workload | availability | reschedule | requests | conflicts | unknown",
+  "intent": "schedule | free_room | workload | availability | reschedule | requests | conflicts | explain | unknown",
   "courseCode": "string or null",
   "sourceDay": "0..4 or null",
   "targetDay": "0..4 or null",

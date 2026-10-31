@@ -9,9 +9,10 @@ import { Badge, Button, ButtonLink, Callout, Card, CardBody, CardHeader, EmptySt
 import { discardVersionAction, generateScheduleAction, publishVersionAction, toggleFixedAction } from "@/lib/actions";
 import { requireRole } from "@/lib/auth";
 import { DAYS, KIND_LABEL } from "@/lib/constants";
+import { explainPlacement } from "@/lib/explanations";
 import { qs, readParams, type SearchParams } from "@/lib/params";
 import { getRef, getTimetable, getVersions } from "@/lib/queries";
-import { ISSUE_LABEL } from "@/lib/scheduler";
+import { findAlternatives, ISSUE_LABEL } from "@/lib/scheduler";
 import { cn, formatDateTime, formatRelative, periodLabel, periodTime, plural } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Smart Scheduling" };
@@ -94,6 +95,27 @@ export default async function SchedulingPage({ searchParams }: { searchParams: S
   const filtered = tt.sessions.filter((s) => (view === "group" ? s.groupIds.includes(entityId) : view === "faculty" ? s.facultyId === entityId : s.roomId === entityId));
   const blocks = view === "faculty" ? tt.state.blockRows.filter((b) => b.facultyId === entityId) : [];
   const selected = tt.sessions.find((s) => String(s.id) === get("session"));
+  const selectedRoom = selected ? tt.state.rooms.get(selected.roomId) : null;
+  const selectedIssues = selected ? tt.issues.filter((issue) => issue.sessionIds.includes(selected.id)) : [];
+  const alternativeLimit = 8;
+  const selectedAlternatives = selected && !selected.isFixed
+    ? findAlternatives(tt.state.sessions, selected.id, tt.state.ctx, { limit: alternativeLimit })
+    : [];
+  const rationale = selected && selectedRoom
+    ? explainPlacement({
+        courseCode: selected.courseCode,
+        kind: selected.kind,
+        isFixed: selected.isFixed,
+        combined: selected.combined,
+        roomCode: selected.roomCode,
+        roomType: selectedRoom.type,
+        roomCapacity: selectedRoom.capacity,
+        students: selected.size,
+        issueCount: selectedIssues.length,
+        alternativeCount: selectedAlternatives.length,
+        alternativesCapped: selectedAlternatives.length === alternativeLimit,
+      })
+    : null;
   const base = { version: version.id, view, id: entityId };
   const link = (extra: Record<string, string | number | undefined>) => qs("/admin/scheduling", { ...base, ...extra });
   const errors = tt.issues.filter((i) => i.severity === "error");
@@ -297,9 +319,23 @@ export default async function SchedulingPage({ searchParams }: { searchParams: S
                     ["Duration", plural(selected.duration, "period")],
                   ]}
                 />
+                {rationale && (
+                  <div className="rounded-lg bg-brand-50/70 p-3 ring-1 ring-brand-100" aria-label="Placement rationale">
+                    <p className="text-xs font-semibold text-brand-900">Why this slot?</p>
+                    <p className="mt-1 text-xs leading-5 text-brand-900/80">{rationale.headline}</p>
+                    <ul className="mt-2 space-y-1.5 text-[11.5px] leading-4 text-ink-2">
+                      {rationale.facts.map((fact) => (
+                        <li key={fact} className="flex gap-1.5">
+                          <CircleCheck className="mt-0.5 size-3.5 shrink-0 text-brand-600" aria-hidden />
+                          <span>{fact}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 <div>
                   <p className="mb-1.5 text-xs font-semibold text-ink-2">Validation</p>
-                  <ConflictList items={tt.issues.filter((i) => i.sessionIds.includes(selected.id)).map((i) => ({ severity: i.severity, message: i.message }))} />
+                  <ConflictList items={selectedIssues.map((i) => ({ severity: i.severity, message: i.message }))} />
                 </div>
                 <InlineAction action={toggleFixedAction} fields={{ sessionId: selected.id }} icon={selected.isFixed ? <PinOff /> : <Pin />} size="sm">
                   {selected.isFixed ? "Unpin session" : "Pin as fixed"}

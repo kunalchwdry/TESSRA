@@ -43,6 +43,12 @@ type ParseResponse = {
   policy?: { categoryCeiling: string; note: string };
 };
 
+const REQUEST_EXAMPLES = [
+  { label: "English", text: "Need a seminar room next Friday sometime between 3 and 6 pm for two hours, 80 people, projector please." },
+  { label: "Hinglish", text: "seminar hall kal shaam chhe baje, do ghante, pachaas log, mic chahiye" },
+  { label: "Conditional", text: "Auditorium if available, otherwise a seminar hall on Thursday evening for 100 people." },
+];
+
 function Fields({ venues, defaults = {}, mode, minDate, leadDays, maxHours }: Omit<Props, "action">) {
   const { state } = useActionForm();
   const [title, setTitle] = useState("");
@@ -128,6 +134,19 @@ function Fields({ venues, defaults = {}, mode, minDate, leadDays, maxHours }: Om
           placeholder="Tell us the event, date, time, attendance and any venue or equipment needs…"
           aria-label="Plain-language booking request"
         />
+        <div className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Example booking requests">
+          <span className="mr-0.5 text-[11px] font-medium text-brand-800/75">Try:</span>
+          {REQUEST_EXAMPLES.map((example) => (
+            <button
+              key={example.label}
+              type="button"
+              onClick={() => { setPlainText(example.text); setParsed(null); setParseError(""); }}
+              className="rounded-full border border-brand-200 bg-white px-2.5 py-1 text-[11px] font-medium text-brand-800 transition-colors hover:bg-brand-100 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/25"
+            >
+              {example.label}
+            </button>
+          ))}
+        </div>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-brand-800/75">Role and priority ceilings are enforced by code, even if the request asks for a higher category.</p>
           <button type="button" className={buttonClasses("primary", "sm")} onClick={parseRequest} disabled={parsing}>
@@ -142,8 +161,9 @@ function Fields({ venues, defaults = {}, mode, minDate, leadDays, maxHours }: Om
         )}
         {parsed?.proposal && (
           <div className="mt-3 rounded-lg bg-white p-3 ring-1 ring-brand-100" role="status" aria-live="polite">
-            <p className="flex items-center gap-2 text-xs font-semibold text-brand-800">
-              <CheckCircle2 className="size-4" aria-hidden /> Draft filled — review every field before submitting
+            <p className={parsed.proposal.canSubmit ? "flex items-center gap-2 text-xs font-semibold text-brand-800" : "flex items-center gap-2 text-xs font-semibold text-warning-fg"}>
+              {parsed.proposal.canSubmit ? <CheckCircle2 className="size-4" aria-hidden /> : <TriangleAlert className="size-4" aria-hidden />}
+              {parsed.proposal.canSubmit ? "Draft filled — review every field before submitting" : "Draft partially filled — complete the items below before submitting"}
             </p>
             {parsed.proposal.assumptions.length > 0 && (
               <div className="mt-2">

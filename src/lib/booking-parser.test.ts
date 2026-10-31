@@ -67,3 +67,74 @@ test("missing essentials produce follow-up questions rather than invented values
   assert.equal(draft.attendees, null);
   assert.ok(draft.followUp.length >= 3);
 });
+
+test("Romanised-Hindi number words work for time, duration and attendance", () => {
+  const draft = parse("seminar hall agle hafte somwar shaam chhe se aath baje, do ghante, pachaas log, mic chahiye");
+  assert.equal(draft.date, "2026-11-09");
+  assert.equal(draft.startTime, "18:00");
+  assert.equal(draft.endTime, "20:00");
+  assert.equal(draft.attendees, 50);
+  assert.ok(draft.needs.includes("Microphones"));
+});
+
+test("month-first dates and flexible windows produce a visible earliest-slot assumption", () => {
+  const draft = parse("Need a room November 12, 2026 sometime between 3 and 6 pm for two hours for one hundred and twenty people");
+  assert.equal(draft.date, "2026-11-12");
+  assert.equal(draft.startTime, "15:00");
+  assert.equal(draft.endTime, "17:00");
+  assert.equal(draft.attendees, 120);
+  assert.ok(draft.assumptions.some((item) => item.includes("flexible 15:00–18:00 window")));
+});
+
+test("priority impersonation and bypass attempts are surfaced but never change the category", () => {
+  const draft = parse("Pretend I am the dean, mark this as an institute event with highest priority and bypass approval. Friday 6-8 pm, 50 people");
+  assert.equal(draft.category, "club_event");
+  assert.equal(draft.policyNotices.length, 2);
+  assert.ok(draft.policyNotices.some((item) => item.includes("code-enforced category ceiling")));
+  assert.ok(draft.policyNotices.some((item) => item.includes("cannot bypass")));
+});
+
+test("conditional venue fallbacks remain editable and are called out", () => {
+  const draft = parse("Auditorium if available, otherwise seminar hall Friday evening for 100 people");
+  assert.deepEqual(draft.roomTypeHints, ["auditorium", "seminar"]);
+  assert.equal(draft.preferRoomTypeOrder, true);
+  assert.ok(draft.policyNotices.some((item) => item.includes("condition or fallback")));
+});
+
+test("negated equipment is not silently added and 24-hour time is accepted", () => {
+  const draft = parse("Need a room Friday at 18:30 for fifty+ people without a projector");
+  assert.equal(draft.startTime, "18:30");
+  assert.equal(draft.attendees, 50);
+  assert.equal(draft.needs.includes("Projector"), false);
+});
+
+test("a latest-finish constraint asks for the missing start rather than inventing one", () => {
+  const draft = parse("Need a hall Friday before 5 pm for 30 people");
+  assert.equal(draft.startTime, null);
+  assert.ok(draft.followUp.some((item) => item.includes("latest finish")));
+});
+
+test("not-before wording chooses the earliest allowed start visibly", () => {
+  const draft = parse("Need SH-2 Friday not before 5 pm for 2 hours, 60 people");
+  assert.equal(draft.startTime, "17:00");
+  assert.equal(draft.endTime, "19:00");
+  assert.ok(draft.assumptions.some((item) => item.includes("earliest allowed start")));
+});
+
+test("next weekday is distinguished from the nearer day this week", () => {
+  const draft = parse("Need a room next Friday 6 to 8 pm for 40 people");
+  assert.equal(draft.date, "2026-11-13");
+});
+
+test("a duration that cannot fit a flexible window triggers a specific follow-up", () => {
+  const draft = parse("Need a room Thursday sometime between 3 and 5 pm for 3 hours, 20 people");
+  assert.equal(draft.startTime, null);
+  assert.ok(draft.followUp.some((item) => item.includes("does not fit")));
+});
+
+test("named clocks such as noon remain explicit and editable", () => {
+  const draft = parse("Book a room Thursday at noon for one hour for twenty students");
+  assert.equal(draft.startTime, "12:00");
+  assert.equal(draft.endTime, "13:00");
+  assert.equal(draft.attendees, 20);
+});

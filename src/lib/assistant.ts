@@ -9,8 +9,9 @@ import { db } from "@/db";
 import * as t from "@/db/schema";
 import type { AssistantPayload } from "@/db/schema";
 import type { CurrentUser } from "./auth";
-import { DAYS, DAY_SHORT, PERIOD_COUNT } from "./constants";
+import { DAYS, DAY_SHORT, PERIOD_COUNT, PERIODS } from "./constants";
 import { getPublishedVersion, loadEngineState, slotRef } from "./engine";
+import { explainPlacement } from "./explanations";
 import { proposeFacultyIntent } from "./llm";
 import { findAlternatives, validateSessions, type EngineSession } from "./scheduler";
 import { currentDayIndex, hoursFromPeriods, periodLabel, periodTime, toMinutes } from "./utils";
@@ -43,6 +44,21 @@ function parsePeriods(text: string): number[] | null {
     const b = m[2] ? Number(m[2]) : a;
     return Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => Math.min(a, b) + i);
   }
+  const clock = text.match(/\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/);
+  if (clock) {
+    let hour = Number(clock[1]);
+    const minute = Number(clock[2] ?? 0);
+    const marker = clock[3].toLowerCase().replaceAll(".", "");
+    if (marker === "pm" && hour < 12) hour += 12;
+    if (marker === "am" && hour === 12) hour = 0;
+    const wanted = hour * 60 + minute;
+    const period = PERIODS.find((item) => {
+      const start = toMinutes(item.start);
+      const end = toMinutes(item.end);
+      return wanted >= start && wanted < end;
+    });
+    if (period) return [period.n];
+  }
   if (/morning|subah/.test(text)) return [1, 2, 3, 4];
   if (/afternoon|evening|dopahar|shaam|sham/.test(text)) return [5, 6, 7, 8];
   if (/all day|whole day|full day|entire day|poora din/.test(text)) return [1, 2, 3, 4, 5, 6, 7, 8];
@@ -57,6 +73,7 @@ export const SUGGESTED_PROMPTS = [
   "What's my schedule today?",
   "Find a free room on Thursday period 3 for 60 students",
   "Move my CS302 class on Wednesday to Friday",
+  "Why is my CS302 class in this slot?",
   "Mark me unavailable on Friday afternoon",
   "How many hours am I teaching this week?",
   "Show my pending requests",
@@ -92,6 +109,56 @@ export async function respond(user: CurrentUser, raw: string): Promise<Reply> {
   });
   const days = parseDays(text);
   const periods = llmIntent?.periods ?? parsePeriods(text);
+
+  /* ---------------- Placement explanation ---------------- */
+  const explanationRequested = llmIntent?.intent === "explain"
+    || (/(?:\bwhy\b|\bexplain\b|\breason\b|kyu+n?|kyo+n?)/.test(text) && /(?:class|lecture|lab|session|tutorial|slot|time|room|[a-z]{2,5}\d{2,4})/.test(text));
+  if (explanationRequested) {
+    if (!mine.length) return { content: "You have no published sessions to explain yet.", payload: null };
+    const parsedCode = text.match(/\b([a-z]{2,5}\d{2,4}[a-z]?)\b/)?.[1] ?? null;
+    const requestedCode = llmIntent?.courseCode?.toLowerCase() ?? parsedCode;
+    const requestedDay = llmIntent?.queryDay ?? llmIntent?.sourceDay ?? days[0]?.day;
+    let candidates = mine;
+    if (requestedCode) candidates = candidates.filter((session) => state.labels.course(session.courseId).toLowerCase() === requestedCode);
+    if (requestedDay !== undefined && requestedDay !== null) candidates = candidates.filter((session) => session.day === requestedDay);
+    if (periods?.length) candidates = candidates.filter((session) => periods.some((period) => covers(session, session.day, period)));
+    if (!candidates.length) {
+      return {
+        content: `I couldn't find that placement in your published timetable. Your sessions are: ${mine.map((session) => `${state.labels.course(session.courseId)} ${DAY_SHORT[session.day]} ${periodLabel(session.startPeriod, session.duration)}`).join(", ")}.`,
+        payload: null,
+      };
+    }
+    if (candidates.length > 1) {
+      return {
+        content: `I found more than one matching class. Include its day or period: ${candidates.map((session) => `${state.labels.course(session.courseId)} ${DAY_SHORT[session.day]} ${periodLabel(session.startPeriod, session.duration)}`).join(", ")}.`,
+        payload: null,
+      };
+    }
+    const session = candidates[0];
+    const room = state.rooms.get(session.roomId);
+    if (!room) return { content: "The session's room is no longer in the scheduling dataset, so I can't explain this placement safely.", payload: null };
+    const issueCount = validateSessions(state.sessions, state.ctx).filter((issue) => issue.sessionIds.includes(session.id)).length;
+    const alternativeLimit = 8;
+    const alternatives = session.isFixed ? [] : findAlternatives(state.sessions, session.id, state.ctx, { limit: alternativeLimit });
+    const size = session.groupIds.reduce((total, groupId) => total + (state.groups.get(groupId)?.size ?? 0), 0);
+    const rationale = explainPlacement({
+      courseCode: state.labels.course(session.courseId),
+      kind: session.kind,
+      isFixed: session.isFixed,
+      combined: session.groupIds.length > 1,
+      roomCode: room.code,
+      roomType: room.type,
+      roomCapacity: room.capacity,
+      students: size,
+      issueCount,
+      alternativeCount: alternatives.length,
+      alternativesCapped: alternatives.length === alternativeLimit,
+    });
+    return {
+      content: `${state.labels.course(session.courseId)} is currently on ${DAYS[session.day]} ${periodLabel(session.startPeriod, session.duration)} in ${room.code}. ${rationale.headline} ${rationale.facts.join(" ")}`,
+      payload: { kind: "sessions", title: "Placement explained", items: [toItem(session)] },
+    };
+  }
 
   /* ---------------- Availability ---------------- */
   if (llmIntent?.intent === "availability" || /(unavailable|not available|can't make|cannot make|\baway\b|\bbusy\b|block (out|my|me)|available nahi|chhutti|leave)/.test(text)) {

@@ -11,9 +11,11 @@ export type BookingParseDraft = {
   attendees: number | null;
   roomCodeHint: string | null;
   roomTypeHints: RoomType[];
+  preferRoomTypeOrder: boolean;
   needs: string[];
   accessible: boolean;
   assumptions: string[];
+  policyNotices: string[];
   followUp: string[];
   recurring: boolean;
 };
@@ -67,6 +69,100 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const timeString = (minutes: number) => `${pad(Math.floor(minutes / 60) % 24)}:${pad(minutes % 60)}`;
 const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+/** English and common Romanised-Hindi number words used in booking requests. */
+const NUMBER_WORD_VALUES: Record<string, number> = {
+  zero: 0,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  eleven: 11,
+  twelve: 12,
+  thirteen: 13,
+  fourteen: 14,
+  fifteen: 15,
+  sixteen: 16,
+  seventeen: 17,
+  eighteen: 18,
+  nineteen: 19,
+  twenty: 20,
+  thirty: 30,
+  forty: 40,
+  fifty: 50,
+  sixty: 60,
+  seventy: 70,
+  eighty: 80,
+  ninety: 90,
+  hundred: 100,
+  thousand: 1000,
+  ek: 1,
+  do: 2,
+  teen: 3,
+  char: 4,
+  chaar: 4,
+  paanch: 5,
+  panch: 5,
+  chhe: 6,
+  cheh: 6,
+  che: 6,
+  saat: 7,
+  aath: 8,
+  nau: 9,
+  das: 10,
+  gyarah: 11,
+  barah: 12,
+  bees: 20,
+  tees: 30,
+  chalis: 40,
+  chaalis: 40,
+  pachas: 50,
+  pachaas: 50,
+  saath: 60,
+  sattar: 70,
+  assi: 80,
+  nabbe: 90,
+  sau: 100,
+  dedh: 1.5,
+};
+const NUMBER_WORD = Object.keys(NUMBER_WORD_VALUES).sort((a, b) => b.length - a.length).map(escapeRegExp).join("|");
+const NUMBER_PHRASE = `(?:${NUMBER_WORD})(?:(?:\\s+|-)+(?:and\\s+)?(?:${NUMBER_WORD})){0,4}`;
+
+function numberPhraseValue(raw: string) {
+  const normalized = raw.toLowerCase().replace(/-/g, " ").trim();
+  if (/^\d+(?:\.\d+)?$/.test(normalized)) return Number(normalized);
+  if (/^(?:one and a half|one-and-a-half)$/.test(raw.toLowerCase().trim())) return 1.5;
+  const tokens = normalized.split(/\s+/).filter((token) => token !== "and" && token !== "of");
+  let total = 0;
+  let current = 0;
+  for (const token of tokens) {
+    const value = NUMBER_WORD_VALUES[token];
+    if (value === undefined) return null;
+    if (value === 100) current = (current || 1) * 100;
+    else if (value === 1000) {
+      total += (current || 1) * 1000;
+      current = 0;
+    } else current += value;
+  }
+  return total + current;
+}
+
+/** Convert number words only when their booking context is unambiguous. */
+function normalizeContextNumbers(text: string) {
+  const context = "(?:people|persons|participants|students|attendees|visitors|spectators|learners|log|logon|seats|hours?|hrs?|hr|ghante?|ghanta|a\\.?m\\.?|p\\.?m\\.?|baje|bje|to|till|until|se|tak)";
+  const pattern = new RegExp(`\\b(${NUMBER_PHRASE})(?=\\s*(?:\\+\\s*)?(?:-\\s*)?${context}\\b)`, "gi");
+  const expanded = text.replace(/\bone(?:-|\s+)and(?:-|\s+)a(?:-|\s+)half(?=\s*(?:-\s*)?(?:hours?|hrs?|hr)\b)/gi, "1.5");
+  return expanded.replace(pattern, (match) => {
+    const value = numberPhraseValue(match);
+    return value === null ? match : String(value);
+  });
+}
+
 function isRealIso(iso: string) {
   const d = parseIso(iso);
   return !Number.isNaN(d.getTime()) && `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}` === iso;
@@ -94,6 +190,21 @@ function explicitDate(text: string, today: string): string | null {
     return isRealIso(value) ? value : null;
   }
 
+  const monthFirst = text.match(
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(20\d{2}))?\b/i,
+  );
+  if (monthFirst) {
+    const month = MONTHS[monthFirst[1].toLowerCase()];
+    const day = Number(monthFirst[2]);
+    let year = monthFirst[3] ? Number(monthFirst[3]) : parseIso(today).getFullYear();
+    let value = `${year}-${pad(month)}-${pad(day)}`;
+    if (!monthFirst[3] && value < today) {
+      year += 1;
+      value = `${year}-${pad(month)}-${pad(day)}`;
+    }
+    return isRealIso(value) ? value : null;
+  }
+
   const numeric = text.match(/\b(\d{1,2})[\/.](\d{1,2})(?:[\/.](20\d{2}))?\b/);
   if (numeric) {
     const year = numeric[3] ? Number(numeric[3]) : parseIso(today).getFullYear();
@@ -114,6 +225,13 @@ function dateForWeekday(startIso: string, wantedDay: number) {
   return startIso;
 }
 
+function nextWeekdayDate(today: string, wantedDay: number) {
+  const js = parseIso(today).getDay();
+  const current = js === 0 ? 6 : js - 1;
+  const nextMonday = addDaysIso(today, 7 - current);
+  return addDaysIso(nextMonday, wantedDay);
+}
+
 function parseDate(text: string, today: string, minDate: string) {
   const lower = text.toLowerCase();
   const named = explicitDate(text, today);
@@ -126,7 +244,7 @@ function parseDate(text: string, today: string, minDate: string) {
   if (/\b(tomorrow|kal)\b/.test(lower)) {
     return { date: addDaysIso(today, 1), days: [] as number[], relative: true };
   }
-  if (/\b(today|aaj)\b/.test(lower)) {
+  if (/\b(today|aaj|tonight|aaj raat)\b/.test(lower)) {
     return { date: today, days: [] as number[], relative: true };
   }
 
@@ -139,7 +257,12 @@ function parseDate(text: string, today: string, minDate: string) {
   }
   found.sort((a, b) => a.index - b.index);
   const days = [...new Set(found.map((f) => f.day))];
-  return { date: days.length ? dateForWeekday(minDate, days[0]) : null, days, relative: false };
+  if (!days.length) return { date: null, days, relative: false };
+  const dayWords = DAY_ALIASES.find((entry) => entry.day === days[0])?.words ?? [];
+  const explicitNext = dayWords.some((word) => new RegExp(`\\b(?:next|agle|agla|agli)\\s+${escapeRegExp(word)}\\b`, "i").test(lower));
+  const nextWeek = /\b(?:next week|agle hafte|agale hafte|agli hafte)\b/.test(lower);
+  const date = explicitNext || nextWeek ? nextWeekdayDate(today, days[0]) : dateForWeekday(minDate, days[0]);
+  return { date, days, relative: false };
 }
 
 type ClockToken = { hour: number; minute: number; meridiem: "am" | "pm" | null };
@@ -168,11 +291,62 @@ function parseDuration(lower: string) {
   return m ? Math.round(Number(m[1]) * 60) : null;
 }
 
+function contextualMeridiem(lower: string): "am" | "pm" | null {
+  if (/\b(shaam|sham|evening|raat|night|tonight)\b/.test(lower)) return "pm";
+  if (/\b(subah|morning)\b/.test(lower)) return "am";
+  if (/\b(dopahar|afternoon)\b/.test(lower)) return "pm";
+  return null;
+}
+
 function parseTimes(text: string) {
   const lower = text.toLowerCase();
   const assumptions: string[] = [];
   const followUp: string[] = [];
   const duration = parseDuration(lower);
+  const globalHint = contextualMeridiem(lower);
+
+  const flexible = lower.match(
+    /\b(?:sometime\s+|any\s*time\s+|anytime\s+)?between\s+(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\s+and\s+(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\b/i,
+  );
+  if (flexible) {
+    const first = clockToken(flexible[1], flexible[2], flexible[3]);
+    const second = clockToken(flexible[4], flexible[5], flexible[6]);
+    if (first && second) {
+      const firstHint = first.meridiem ?? second.meridiem ?? globalHint;
+      const secondHint = second.meridiem ?? first.meridiem ?? globalHint;
+      const start = toClockMinutes(first, firstHint);
+      let windowEnd = toClockMinutes(second, secondHint);
+      if (start !== null && windowEnd !== null) {
+        if (windowEnd <= start && !second.meridiem && windowEnd + 12 * 60 > start) windowEnd += 12 * 60;
+        const length = duration ?? 120;
+        if (start + length <= windowEnd) {
+          assumptions.push(`The flexible ${timeString(start)}–${timeString(windowEnd)} window was filled with its earliest ${length / 60}-hour slot (${timeString(start)}–${timeString(start + length)}).`);
+          if (duration === null) assumptions.push("No duration was stated; a 2-hour booking was assumed.");
+          return { start, end: start + length, assumptions, followUp };
+        }
+        followUp.push(`The requested duration does not fit inside the ${timeString(start)}–${timeString(windowEnd)} window. Choose a shorter duration or wider window.`);
+        return { start: null, end: null, assumptions, followUp };
+      }
+    }
+  }
+
+  const notBefore = lower.match(/\bnot\s+before\s+(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\b/i);
+  if (notBefore) {
+    const token = clockToken(notBefore[1], notBefore[2], notBefore[3]);
+    const start = token ? toClockMinutes(token, globalHint) : null;
+    if (start !== null) {
+      const length = duration ?? 120;
+      assumptions.push(`“Not before” was interpreted as the earliest allowed start, ${timeString(start)}.`);
+      if (duration === null) assumptions.push("No duration was stated; a 2-hour booking was assumed.");
+      return { start, end: Math.min(start + length, 24 * 60), assumptions, followUp };
+    }
+  }
+
+  if (/\b(?:before|by)\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b/i.test(lower)) {
+    followUp.push("A latest finish was stated but no start time was given. What start time should be used?");
+    return { start: null, end: null, assumptions, followUp };
+  }
+
   const range = lower.match(
     /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\s*(?:baje|bje)?\s*(?:to|till|until|se|[-–])\s*(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\s*(?:baje|bje|tak)?\b/i,
   );
@@ -181,11 +355,6 @@ function parseTimes(text: string) {
     const first = clockToken(range[1], range[2], range[3]);
     const second = clockToken(range[4], range[5], range[6]);
     if (first && second) {
-      const globalHint: "am" | "pm" | null = /\b(shaam|sham|evening|raat|night)\b/.test(lower)
-        ? "pm"
-        : /\b(subah|morning)\b/.test(lower)
-          ? "am"
-          : null;
       const firstHint = first.meridiem ?? second.meridiem ?? globalHint;
       const secondHint = second.meridiem ?? first.meridiem ?? globalHint;
       let start = toClockMinutes(first, firstHint);
@@ -200,20 +369,30 @@ function parseTimes(text: string) {
     }
   }
 
+  const namedClock = lower.match(/\b(noon|midday|midnight)\b/);
+  if (namedClock) {
+    const start = namedClock[1] === "midnight" ? 0 : 12 * 60;
+    const length = duration ?? 120;
+    if (duration === null) assumptions.push("No duration was stated; a 2-hour booking was assumed.");
+    return { start, end: Math.min(start + length, 24 * 60), assumptions, followUp };
+  }
+
+  const twentyFourHour = lower.match(/\b(?:at|from)\s+([01]?\d|2[0-3]):([0-5]\d)\b/);
+  if (twentyFourHour) {
+    const start = Number(twentyFourHour[1]) * 60 + Number(twentyFourHour[2]);
+    const length = duration ?? 120;
+    if (duration === null) assumptions.push("No duration was stated; a 2-hour booking was assumed.");
+    return { start, end: Math.min(start + length, 24 * 60), assumptions, followUp };
+  }
+
   const single = lower.match(/(?:\bat\s+|\bfrom\s+|\b)(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\s*(?:baje|bje)\b/i)
     ?? lower.match(/\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
   if (single) {
     const token = clockToken(single[1], single[2], single[3]);
-    const hint: "am" | "pm" | null = /\b(shaam|sham|evening|raat|night)\b/.test(lower)
-      ? "pm"
-      : /\b(subah|morning)\b/.test(lower)
-        ? "am"
-        : /\b(dopahar|afternoon)\b/.test(lower)
-          ? "pm"
-          : null;
-    const start = token ? toClockMinutes(token, hint) : null;
+    const start = token ? toClockMinutes(token, globalHint) : null;
     if (start !== null) {
       const length = duration ?? 120;
+      if (/\b(?:around|about|approximately|approx|lagbhag)\s+\d/.test(lower)) assumptions.push(`The approximate time was filled as ${timeString(start)}; please verify it.`);
       if (duration === null) assumptions.push("No duration was stated; a 2-hour booking was assumed.");
       return { start, end: Math.min(start + length, 24 * 60), assumptions, followUp };
     }
@@ -239,7 +418,7 @@ function parseTimes(text: string) {
 
 function parseAttendees(text: string) {
   const lower = text.toLowerCase();
-  const noun = lower.match(/\b(?:around|about|approx(?:imately)?|lagbhag)?\s*(\d{1,4})\s*(?:people|persons|participants|students|attendees|visitors|spectators|learners|log|logon|seats)\b/);
+  const noun = lower.match(/\b(?:around|about|approx(?:imately)?|lagbhag)?\s*(\d{1,4})\s*\+?\s*(?:people|persons|participants|students|attendees|visitors|spectators|learners|log|logon|seats)\b/);
   if (noun) return Number(noun[1]);
   const expected = lower.match(/\b(?:attendance|capacity|crowd)\s*(?:of|is|:)?\s*(\d{1,4})\b/);
   return expected ? Number(expected[1]) : null;
@@ -251,34 +430,52 @@ function parseNeeds(text: string) {
   const add = (value: string) => {
     if (!needs.includes(value)) needs.push(value);
   };
-  if (/\b(projector|projection|screen)\b/.test(lower)) add("Projector");
-  if (/\b(sound|audio|pa system|speakers?)\b/.test(lower)) add("Audio system");
-  if (/\b(mics?|microphones?|mic chahiye)\b/.test(lower)) {
+  const wanted = (pattern: string) => {
+    const mention = new RegExp(`\\b(?:${pattern})\\b`, "i");
+    if (!mention.test(lower)) return false;
+    const before = new RegExp(`\\b(?:no(?:\\s+need\\s+for)?|without|do\\s+not\\s+need|don't\\s+need|not\\s+requiring)\\b(?:\\s+\\w+){0,3}\\s+(?:${pattern})\\b`, "i");
+    const after = new RegExp(`\\b(?:${pattern})\\b(?:\\s+\\w+){0,3}\\s+(?:nahi\\s+chahiye|not\\s+needed|required\\s+nahi)\\b`, "i");
+    return !before.test(lower) && !after.test(lower);
+  };
+  if (wanted("projector|projection|screen")) add("Projector");
+  if (wanted("sound|audio|pa\\s+system|speakers?")) add("Audio system");
+  if (wanted("mics?|microphones?")) {
     add("Microphones");
     add("Audio system");
   }
-  if (/\b(stage|stage lights?|lighting)\b/.test(lower)) add("Stage lighting");
-  if (/\b(recording|record|camera)\b/.test(lower)) add("Recording");
-  if (/\b(wi[ -]?fi|internet)\b/.test(lower)) add("Wi-Fi access");
-  if (/\b(computers?|workstations?|coding lab)\b/.test(lower)) add("Lab workstations");
-  if (/\b(accessible|wheelchair|wheel chair|ramp|barrier[- ]free)\b/.test(lower)) add("Accessibility");
+  if (wanted("stage|stage\\s+lights?|lighting")) add("Stage lighting");
+  if (wanted("recording|record|camera")) add("Recording");
+  if (wanted("wi[ -]?fi|internet")) add("Wi-Fi access");
+  if (wanted("computers?|workstations?|coding\\s+lab")) add("Lab workstations");
+  if (wanted("accessible|wheelchair|wheel\\s+chair|ramp|barrier[- ]free")) add("Accessibility");
   return needs;
 }
 
 function parseRoom(text: string) {
   const lower = text.toLowerCase();
   const code = text.match(/\b(?:LT-?\d+|[A-Z]{1,5}-\d+[A-Z]?|AUD|OAT|EXH-[NS])\b/i)?.[0] ?? null;
-  const types: RoomType[] = [];
-  const add = (type: RoomType) => {
-    if (!types.includes(type)) types.push(type);
+  const mentions: { type: RoomType; index: number }[] = [];
+  const find = (type: RoomType, pattern: RegExp) => {
+    const match = pattern.exec(lower);
+    if (match) mentions.push({ type, index: match.index });
   };
-  if (/\b(auditorium|main hall|bada hall)\b/.test(lower) || code?.toUpperCase() === "AUD") add("auditorium");
-  if (/\b(seminar(?: hall| room)?|small room|chhota hall)\b/.test(lower)) add("seminar");
-  if (/\b(computer lab|computing lab|electronics? lab|\blab\b)\b/.test(lower)) add("lab");
-  if (/\b(lecture hall|classroom|class room)\b/.test(lower) || /^LT/i.test(code ?? "")) add("lecture");
-  if (/\b(outdoor|open air|lawn|ground|oat)\b/.test(lower) || code?.toUpperCase() === "OAT") add("outdoor");
-  if (!types.length && /\b(room|venue|space|jagah|hall)\b/.test(lower)) types.push("seminar", "lecture", "auditorium");
-  return { code: code ? code.toUpperCase().replace(/^LT(\d)/, "LT-$1") : null, types };
+  find("auditorium", /\b(auditorium|main hall|bada hall)\b/);
+  find("seminar", /\b(seminar(?: hall| room)?|small room|chhota hall)\b/);
+  find("lab", /\b(computer lab|computing lab|electronics? lab|lab)\b/);
+  find("lecture", /\b(lecture hall|classroom|class room)\b/);
+  find("outdoor", /\b(outdoor|open air|lawn|ground|oat)\b/);
+  if (code?.toUpperCase() === "AUD" && !mentions.some((item) => item.type === "auditorium")) mentions.push({ type: "auditorium", index: 0 });
+  if (/^LT/i.test(code ?? "") && !mentions.some((item) => item.type === "lecture")) mentions.push({ type: "lecture", index: 0 });
+  if (code?.toUpperCase() === "OAT" && !mentions.some((item) => item.type === "outdoor")) mentions.push({ type: "outdoor", index: 0 });
+  mentions.sort((a, b) => a.index - b.index);
+  const explicitTypes = [...new Set(mentions.map((item) => item.type))];
+  const generic = !explicitTypes.length && /\b(room|venue|space|jagah|hall)\b/.test(lower);
+  const types: RoomType[] = generic ? ["seminar", "lecture", "auditorium"] : explicitTypes;
+  return {
+    code: code ? code.toUpperCase().replace(/^LT(\d)/, "LT-$1") : null,
+    types,
+    preferTypeOrder: explicitTypes.length > 1,
+  };
 }
 
 function inferCategory(text: string, mode: "club" | "department") {
@@ -301,14 +498,28 @@ function cleanTitle(value: string) {
   return cleaned.length > 80 ? `${cleaned.slice(0, 77).trim()}…` : cleaned;
 }
 
-function inferTitle(text: string, category: string) {
-  const forMatch = text.match(/\bfor\s+(?:an?\s+|the\s+)?(.+?)(?=\s+on\b|\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|,|\s+at\s+\d|\s+from\s+\d|$)/i);
-  if (forMatch) {
-    const value = cleanTitle(forMatch[1]);
-    if (value.length >= 3 && !/^\d+\s*(?:people|students)/i.test(value)) return value;
+function policyNotices(text: string, mode: "club" | "department") {
+  const lower = text.toLowerCase();
+  const notices: string[] = [];
+  const priorityManipulation =
+    /\b(?:critical|highest|top|emergency)\s+priority\b|\b(?:mark|classify|treat)\s+(?:this|it|me)\s+as\s+(?:an?\s+)?(?:exam|regular class|institute event|guest lecture)\b|\b(?:pretend|act)\s+(?:that\s+)?(?:i am|i'm)\s+(?:the\s+)?(?:admin|dean|director)\b|\b(?:override|raise|change)\s+(?:my\s+|the\s+)?priority\b/i.test(lower);
+  const bypassAttempt =
+    /\b(?:bypass|jailbreak|system\s+prompt|ignore\s+(?:(?:all|the|any|previous)\s+){0,2}(?:rules|policy|instructions)|without\s+approval|no\s+approval|hide\s+(?:the\s+)?attendance|do\s+not\s+mention|don't\s+mention|work\s+around\s+(?:the\s+)?limit|split\s+(?:it\s+)?to\s+(?:avoid|bypass))\b/i.test(lower);
+  const conditional = /\b(?:if|unless|otherwise|only\s+if|provided\s+that|in\s+case|agar|warna|nahi\s+to)\b/i.test(lower);
+
+  if (priorityManipulation) {
+    notices.push(`Priority instructions in the request were ignored. This ${mode === "club" ? "club" : "department"} account keeps its code-enforced category ceiling.`);
   }
-  const eventMatch = text.match(/\b([A-Za-z][A-Za-z -]{2,45}(?:workshop|contest|farewell|lecture|seminar|meeting|rehearsal|concert|session|talk|event|finals?|exhibition))\b/i);
-  if (eventMatch) return cleanTitle(eventMatch[1]);
+  if (bypassAttempt) {
+    notices.push("Wording cannot bypass capacity, duration, lead-time, role or approval rules. Enter the true event details; every field is re-validated on submission.");
+  }
+  if (conditional) {
+    notices.push("A condition or fallback was detected. This draft represents one concrete booking; verify the selected venue and time, and submit separate alternatives if needed.");
+  }
+  return notices;
+}
+
+function inferTitle(text: string, category: string) {
   const fallback: Record<string, string> = {
     workshop: "Workshop",
     seminar: "Seminar / guest lecture",
@@ -318,30 +529,46 @@ function inferTitle(text: string, category: string) {
     department_event: "Department event",
     club_event: "Club event",
   };
-  return fallback[category] ?? "Venue request";
+  const generic = fallback[category] ?? "Venue request";
+  if (/\b(?:pretend|bypass|jailbreak|highest\s+priority|mark\s+(?:this|it)\s+as)\b/i.test(text)) return generic;
+
+  const quantityLead = new RegExp(`^(?:\\d+(?:\\.5)?|${NUMBER_PHRASE})\\s*(?:hours?|hrs?|ghante?|people|students|participants|attendees|log)\\b`, "i");
+  const forMatch = text.match(/\bfor\s+(?:an?\s+|the\s+)?(.+?)(?=\s+on\b|\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|,|\s+at\s+\d|\s+from\s+\d|$)/i);
+  if (forMatch) {
+    const value = cleanTitle(forMatch[1]);
+    if (value.length >= 3 && !quantityLead.test(value) && !/^(?:if|otherwise|unless)\b/i.test(value)) return value;
+  }
+  const eventMatch = text.match(/\b([A-Za-z][A-Za-z -]{2,45}(?:workshop|contest|farewell|lecture|seminar|meeting|rehearsal|concert|session|talk|event|finals?|exhibition))\b/i);
+  if (eventMatch) {
+    const value = cleanTitle(eventMatch[1]);
+    if (!/^(?:if|otherwise|unless)\b/i.test(value)) return value;
+  }
+  return generic;
 }
 
 export function parsePlainLanguageBooking(input: BookingParseInput): BookingParseDraft {
   const text = input.text.trim().replace(/\s+/g, " ");
+  const parseText = normalizeContextNumbers(text);
   const lower = text.toLowerCase();
   const assumptions: string[] = [];
   const followUp: string[] = [];
+  const notices = policyNotices(text, input.mode);
 
-  const parsedDate = parseDate(text, input.today, input.minDate);
+  const parsedDate = parseDate(parseText, input.today, input.minDate);
   let date = parsedDate.date;
   if (!date) followUp.push("Which date or weekday should this booking use?");
   if (date && date < input.minDate) {
     followUp.push(`The requested date is before the earliest permitted date (${input.minDate}); please choose a later date.`);
   }
 
-  const times = parseTimes(text);
+  const times = parseTimes(parseText);
   assumptions.push(...times.assumptions);
   followUp.push(...times.followUp);
   if (times.start !== null && times.end !== null && times.end - times.start > input.maxHours * 60) {
     followUp.push(`This request is longer than the ${input.maxHours}-hour booking limit; shorten or split it.`);
   }
 
-  const attendees = parseAttendees(text);
+  const attendees = parseAttendees(parseText);
   if (!attendees) followUp.push("How many people are expected?");
 
   const room = parseRoom(text);
@@ -373,9 +600,11 @@ export function parsePlainLanguageBooking(input: BookingParseInput): BookingPars
     attendees,
     roomCodeHint: room.code,
     roomTypeHints: room.types,
+    preferRoomTypeOrder: room.preferTypeOrder,
     needs,
     accessible,
     assumptions,
+    policyNotices: notices,
     followUp,
     recurring,
   };

@@ -126,7 +126,7 @@ function SessionCard({
   const label = describe(s, issues);
   const title = conflict ? issues?.join("\n") : undefined;
   return href ? (
-    <Link href={href} scroll={false} className={cls} aria-label={label} title={title}>
+    <Link href={href} scroll={false} className={cls} aria-label={`${label}. Open details`} title={title}>
       {body}
     </Link>
   ) : (
@@ -284,7 +284,7 @@ function TimetableAgenda({ sessions, issuesBySession = {}, hrefFor, show = {}, b
                   return (
                     <li key={s.id}>
                       {href ? (
-                        <Link href={href} scroll={false} aria-label={describe(s, issues)} className="block rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/40">
+                        <Link href={href} scroll={false} aria-label={`${describe(s, issues)}. Open details`} className="block rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-brand-500/40">
                           {inner}
                         </Link>
                       ) : (

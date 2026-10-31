@@ -5,7 +5,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { parsePlainLanguageBooking } from "@/lib/booking-parser";
 import { buildBookingAnalyzer } from "@/lib/engine";
 import { getSettings } from "@/lib/queries";
-import { addDaysIso, todayIso } from "@/lib/utils";
+import { addDaysIso, parseIso, todayIso, toMinutes } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -71,8 +71,11 @@ export async function POST(req: Request) {
     if (user.role === "club") return room.bookable || room.type === "lab";
     return ["lecture", "seminar", "auditorium", "outdoor"].includes(room.type);
   });
-  const warnings: string[] = [];
+  const warnings: string[] = [...draft.policyNotices];
   const followUp = [...draft.followUp];
+  if (draft.date && !settings.allowWeekendBookings && [0, 6].includes(parseIso(draft.date).getDay())) {
+    followUp.push("Weekend bookings are disabled by campus policy; choose a weekday.");
+  }
   let requested: RoomRow | null = null;
 
   if (draft.roomCodeHint) {
@@ -85,7 +88,13 @@ export async function POST(req: Request) {
     .filter((room) => !draft.attendees || room.capacity >= draft.attendees)
     .filter((room) => !draft.roomTypeHints.length || draft.roomTypeHints.includes(room.type))
     .filter((room) => supportsNeeds(room, draft.needs, draft.accessible))
-    .sort((a, b) => a.capacity - b.capacity || a.code.localeCompare(b.code));
+    .sort((a, b) => {
+      if (draft.preferRoomTypeOrder) {
+        const typeOrder = draft.roomTypeHints.indexOf(a.type) - draft.roomTypeHints.indexOf(b.type);
+        if (typeOrder) return typeOrder;
+      }
+      return a.capacity - b.capacity || a.code.localeCompare(b.code);
+    });
 
   if (requested) {
     const problems = roomProblem(requested, draft.attendees, draft.needs, draft.accessible);
@@ -132,6 +141,11 @@ export async function POST(req: Request) {
     draft.assumptions.push(`${selected.code} (${selected.capacity} seats) was proposed as the smallest suitable active venue.`);
   }
 
+  const durationMinutes = draft.startTime && draft.endTime ? toMinutes(draft.endTime) - toMinutes(draft.startTime) : null;
+  const dateAllowed = Boolean(draft.date && draft.date >= minDate);
+  const durationAllowed = durationMinutes !== null && durationMinutes > 0 && durationMinutes <= settings.maxBookingHours * 60;
+  const weekdayAllowed = Boolean(draft.date && (settings.allowWeekendBookings || ![0, 6].includes(parseIso(draft.date).getDay())));
+
   const proposal = {
     title: draft.title,
     category: draft.category,
@@ -147,7 +161,7 @@ export async function POST(req: Request) {
     assumptions: [...new Set(draft.assumptions)],
     followUp: [...new Set(followUp)],
     warnings: [...new Set(warnings)],
-    canSubmit: Boolean(draft.date && draft.startTime && draft.endTime && draft.attendees && selected),
+    canSubmit: Boolean(draft.date && draft.startTime && draft.endTime && draft.attendees && selected && dateAllowed && durationAllowed && weekdayAllowed),
   };
 
   return json({

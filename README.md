@@ -37,7 +37,8 @@ All four demo accounts use password **`tessra123`** and are pre-approved.
    - **Approve a change** → open Approval Centre. If the clean demo queue is empty, click **Prepare approval example**; it creates one genuine conflict-free faculty request that can be approved or rejected normally.
 3. Press **Ctrl/⌘ K** anywhere to search pages by intent — try “room”, “timetable”, “approval”, or “booking”.
 4. For official scoring, open **Admin → Official Dataset**. Switch the full CIT timetable between group/faculty/room (phones receive a day agenda), generate/download `schedule.json`, upload a disruption JSON, inspect the exact diff, and separately approve it before `schedule_after.json` unlocks.
-5. Optional role checks: Faculty → phone-friendly timetable/change request; Club → live venue finder/booking; Coordinator → department approvals.
+5. AI checks: as **Club**, open New Booking and try the English/Hinglish/conditional examples (or a priority-bypass prompt); every result is an editable, policy-capped draft. As **Faculty**, select a timetable class to ask “why this slot?” and inspect the hard-validity facts before trying a change request.
+6. Optional: Coordinator → department approvals and faculty/resource views.
 
 No evaluator-only bypass exists: availability, changes, approvals and exports use the same validation and audit paths as normal actions.
 
