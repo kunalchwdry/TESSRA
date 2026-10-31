@@ -1,11 +1,11 @@
+"use client";
+
 import { Mail, ShieldCheck, UserPlus } from "lucide-react";
+import { useState } from "react";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { getCurrentUser } from "@/lib/auth";
 import { PRODUCT } from "@/lib/constants";
 import { Input, Select, Textarea } from "@/components/ui";
 import { buttonClasses } from "@/components/ui";
-import { submitAccessRequest } from "./actions";
 
 export const metadata: Metadata = { title: "Request Access — " + PRODUCT.name };
 export const dynamic = "force-dynamic";
@@ -24,14 +24,61 @@ const CLUBS = [
   { value: "Photography Club", label: "Photography Club" },
 ];
 
-export default async function AccessRequestPage() {
-  try {
-    const user = await getCurrentUser();
-    if (user) {
-      redirect("/");
+type FormState = {
+  ok: boolean;
+  message: string;
+  errors?: Record<string, string>;
+};
+
+export default function AccessRequestPage() {
+  const [state, setState] = useState<FormState | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function submitAccessRequest(fd: FormData) {
+    setIsSubmitting(true);
+    setState(null);
+
+    const name = (fd.get("name") as string)?.trim();
+    const email = (fd.get("email") as string)?.toLowerCase().trim();
+    const password = (fd.get("password") as string) ?? "";
+    const requestedRole = (fd.get("requestedRole") as string) ?? "";
+    const departmentId = Number(fd.get("departmentId")) || null;
+    const clubId = Number(fd.get("clubId")) || null;
+    const reason = (fd.get("reason") as string)?.trim();
+
+    // Client-side validation
+    const errors: Record<string, string> = {};
+    if (!name || name.length < 2) errors.name = "Enter your full name";
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = "Enter a valid email address";
+    if (!password || password.length < 8) errors.password = "Password must be at least 8 characters";
+    if (!["coordinator", "faculty", "club"].includes(requestedRole)) errors.requestedRole = "Select a valid role";
+    if (!reason || reason.length < 10) errors.reason = "Please explain why you need access (10+ characters)";
+    if (Object.keys(errors).length) {
+      setState({ ok: false, message: "Please fix the highlighted fields.", errors });
+      setIsSubmitting(false);
+      return;
     }
-  } catch {
-    // Ignore session check errors — allow page to load
+
+    try {
+      const res = await fetch("/api/access-requests", {
+        method: "POST",
+        body: fd,
+      });
+
+      const result = await res.json();
+
+      if (!res.ok) {
+        setState({ ok: false, message: result.message || "Submission failed.", errors: result.errors });
+        setIsSubmitting(false);
+        return;
+      }
+
+      setState({ ok: true, message: result.message || "Access request submitted successfully!" });
+      setIsSubmitting(false);
+    } catch (err) {
+      setState({ ok: false, message: "Network error. Please try again." });
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -49,6 +96,22 @@ export default async function AccessRequestPage() {
             </p>
           </div>
         </div>
+
+        {state && (
+          <div className={`mb-6 rounded-xl p-4 ${state.ok ? "bg-green-50 border border-green-200 text-green-900" : "bg-rose-50 border border-rose-200 text-rose-900"}`}>
+            <div className="flex gap-3">
+              {state.ok ? (
+                <span className="size-5 shrink-0 text-green-600">✓</span>
+              ) : (
+                <span className="size-5 shrink-0 text-rose-600">⚠</span>
+              )}
+              <div>
+                <h3 className="font-semibold">{state.ok ? "Success!" : "Error"}</h3>
+                <p className="mt-1 text-xs">{state.message}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="rounded-xl border border-line bg-surface shadow-card p-6">
           <form action={submitAccessRequest} className="space-y-4">
@@ -94,8 +157,8 @@ export default async function AccessRequestPage() {
               <label className="block text-[13px] font-medium text-ink">Why do you need access?</label>
               <Textarea name="reason" placeholder="Describe your role and what you need to do in TESSRA…" required minLength={10} />
             </div>
-            <button type="submit" className={buttonClasses("primary", "lg")}>
-              Submit Request
+            <button type="submit" disabled={isSubmitting} className={buttonClasses("primary", "lg")}>
+              {isSubmitting ? "Submitting…" : "Submit Request"}
             </button>
           </form>
         </div>
