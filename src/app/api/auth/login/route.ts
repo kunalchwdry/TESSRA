@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       // created in Supabase Auth (bug in earlier approvals), create their Auth account
       // using the plain password from their access request record, then retry sign-in.
       const [localUser] = await db
-        .select({ id: t.users.id, email: t.users.email, supabaseUid: t.users.supabaseUid, approvalStatus: t.users.approvalStatus })
+        .select({ id: t.users.id, name: t.users.name, email: t.users.email, role: t.users.role, supabaseUid: t.users.supabaseUid, approvalStatus: t.users.approvalStatus })
         .from(t.users)
         .where(eq(t.users.email, email))
         .limit(1);
