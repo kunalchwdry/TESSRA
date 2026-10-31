@@ -147,6 +147,7 @@ Information absent from the original message is not guessed. For example, a comp
 - Next.js production build: passed
 - `npm audit --omit=dev`: zero vulnerabilities
 - Official baseline and repaired exports: zero hard violations
+- Production official-prompt follow-up: **17/17 assertions passed**, with zero product console errors, page errors or HTTP 5xx responses
 
 ## 8. Defensible rating
 

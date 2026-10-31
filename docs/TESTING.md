@@ -147,3 +147,9 @@ Commit `54fa047` deployed successfully and was tested through the real authentic
 - Laptop and phone journeys had no document overflow.
 
 **Result: 29 browser assertions passed across the combined run; 0 product console errors, 0 page errors and 0 HTTP 5xx responses. No booking or timetable mutation was needed.**
+
+### Official prompt corpus follow-up
+
+After commit `14e668c` deployed, all eight public starter-pack requests plus six official/adversarial variants were sent through the authenticated production API. Checks covered straight-hour durations, audience attendance, SH-2 accessibility fallback to SH-1, recurrence, missing essentials, priority escalation, group IDs, midnight crossing and contradictory range/duration text.
+
+**Result: 17 production assertions passed; 0 product console errors, 0 page errors and 0 HTTP 5xx responses.**
