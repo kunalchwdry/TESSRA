@@ -4,6 +4,7 @@ import { db } from "@/db";
 import * as t from "@/db/schema";
 import { hashPassword } from "@/lib/password";
 import { eq } from "drizzle-orm";
+import { redirect } from "next/navigation";
 
 export async function submitAccessRequest(fd: FormData) {
   const name = (fd.get("name") as string)?.trim();
@@ -37,6 +38,5 @@ export async function submitAccessRequest(fd: FormData) {
     status: "pending",
   });
 
-  // Redirect to login with success message
-  return { ok: true, message: "Access request submitted. An admin will review it shortly." };
+  redirect("/access-request/success");
 }
