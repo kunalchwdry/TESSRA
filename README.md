@@ -200,7 +200,7 @@ The production judge path has also been exercised after an Admin reset: **Genera
 engine/          — CP-SAT model (hard H1–H14, soft S1–S6), bookings, exams, repairs, CLI + FastAPI + pytest
 official/        — Untouched starter pack + problem statement
 exports/         — App-produced schedule.json, schedule_after.json, validator reports
-src/             — Next.js App Router: four role workspaces, auth, audit, notifications
+src/             — Next.js App Router: four role workspaces, auth, audit, targeted notices
 docs/            — requirements, architecture, deployment, testing and submission audit evidence
 access.md        — Complete access credentials (this repo)
 AI_USAGE.md      — Full AI declaration
@@ -215,8 +215,8 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 - **Access requests** — non-admin roles must request access; admin approves/rejects
 - **Instant account creation** — admin can create accounts directly at `/admin/create-account`
 - **Supabase Auth** — email/password auth with email confirmation enabled
-- **Notifications** — in-app notification system
-- **Audit logs** — complete audit trail of all actions
+- **Targeted smart notices** — Admins publish by role or department; Coordinators are server-scoped to their own department; recipients acknowledge private inbox copies and publishers see delivery/read totals without a database migration
+- **Audit logs** — complete audit trail of all actions, including notice publication
 - **Timetable/booking validation** — conflict-checked with suggested alternatives
 - **English/Hinglish booking intake** — fills the real editable form, exposes assumptions, asks for missing essentials and revalidates on submit
 - **Faculty AI schedule assistant** — optional LLM intent proposal, deterministic constraint validation, human submission and coordinator approval

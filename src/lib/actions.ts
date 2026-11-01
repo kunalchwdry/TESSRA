@@ -8,6 +8,14 @@ import * as t from "@/db/schema";
 import { respond } from "./assistant";
 import { endSession, requireRole, requireUser } from "./auth";
 import { hashPassword } from "./password";
+import {
+  isNoticeRecipient,
+  makeNoticeMarker,
+  NOTICE_CATEGORY_LABEL,
+  noticeAudienceLabel,
+  noticeTone,
+  validateNoticeDraft,
+} from "./notices";
 import { departmentCanReviewLab, findHigherPriorityContender, normalizeBookingPolicy, validateBookingPolicy, type PolicyBooking } from "./booking-policy";
 import { findAlternatives } from "./scheduler";
 import { BOOKING_CATEGORIES, BOOKING_NEEDS, DAY_SHORT, ROOM_FEATURES, type ChangeType, type Priority, type RoomStatus, type RoomType, type SessionKind } from "./constants";
@@ -744,21 +752,87 @@ export async function toggleAvailabilityAction(day: number, period: number, reas
   return ok(existing ? `${DAY_SHORT[day]} P${period} marked available.` : `${DAY_SHORT[day]} P${period} marked unavailable.`);
 }
 
-/* ============================= Notifications ========================== */
+/* ================================ Notices ============================== */
+export async function publishNoticeAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireRole("admin", "coordinator");
+  const coordinatorDepartmentId = user.role === "coordinator" ? user.departmentId : null;
+  if (user.role === "coordinator" && !coordinatorDepartmentId) return fail("Your coordinator account is not assigned to a department.");
+
+  const audience = user.role === "coordinator" ? "department" : str(fd, "audience");
+  const departmentId = user.role === "coordinator" ? coordinatorDepartmentId : num(fd, "departmentId");
+  const result = validateNoticeDraft({
+    title: str(fd, "title"),
+    body: str(fd, "body"),
+    category: str(fd, "category"),
+    audience,
+    departmentId,
+  });
+  if (!result.ok) return fail("Please fix the highlighted notice fields.", result.fieldErrors);
+  const notice = result.value;
+
+  const [candidates, department] = await Promise.all([
+    db
+      .select({ id: t.users.id, role: t.users.role, departmentId: t.users.departmentId, approvalStatus: t.users.approvalStatus })
+      .from(t.users)
+      .where(inArray(t.users.role, ["coordinator", "faculty", "club"])),
+    notice.departmentId
+      ? db.select({ id: t.departments.id, name: t.departments.name }).from(t.departments).where(eq(t.departments.id, notice.departmentId)).limit(1)
+      : Promise.resolve([]),
+  ]);
+  if (notice.audience === "department" && !department[0]) {
+    return fail("That department no longer exists.", { departmentId: "Choose an available department." });
+  }
+
+  const recipients = candidates.filter((candidate) => isNoticeRecipient(candidate, notice));
+  if (!recipients.length) return fail("No approved accounts match that audience. Nothing was published.", { audience: "Choose an audience with active recipients." });
+
+  const audienceLabel = noticeAudienceLabel(notice.audience, department[0]?.name);
+  await db.transaction(async (tx) => {
+    const [campaign] = await tx
+      .insert(t.auditLogs)
+      .values({
+        actorId: user.id,
+        action: "notice.published",
+        entityType: "notice",
+        entityId: null,
+        summary: `Published ${NOTICE_CATEGORY_LABEL[notice.category].toLowerCase()} notice “${notice.title}” to ${audienceLabel} (${recipients.length} recipient${recipients.length === 1 ? "" : "s"})`,
+      })
+      .returning({ id: t.auditLogs.id });
+    const href = makeNoticeMarker({
+      campaignId: campaign.id,
+      category: notice.category,
+      audience: notice.audience,
+      departmentId: notice.departmentId,
+    });
+    await tx.insert(t.notifications).values(
+      recipients.map((recipient) => ({
+        userId: recipient.id,
+        title: notice.title,
+        body: notice.body,
+        tone: noticeTone(notice.category),
+        href,
+      })),
+    );
+  });
+
+  refresh();
+  return ok(`Notice published to ${recipients.length} recipient${recipients.length === 1 ? "" : "s"}.`);
+}
+
 export async function markNotificationReadAction(_prev: ActionState, fd: FormData): Promise<ActionState> {
   const user = await requireUser();
   const id = num(fd, "id");
-  if (!id) return fail("Notification not found.");
+  if (!id) return fail("Notice not found.");
   await db.update(t.notifications).set({ read: true }).where(and(eq(t.notifications.id, id), eq(t.notifications.userId, user.id)));
   refresh();
-  return ok("Marked as read.");
+  return ok("Acknowledged.");
 }
 
 export async function markAllNotificationsReadAction(_prev: ActionState, _fd: FormData): Promise<ActionState> {
   const user = await requireUser();
   await db.update(t.notifications).set({ read: true }).where(and(eq(t.notifications.userId, user.id), eq(t.notifications.read, false)));
   refresh();
-  return ok("All notifications marked as read.");
+  return ok("All notices acknowledged.");
 }
 
 /* =============================== Assistant ============================ */

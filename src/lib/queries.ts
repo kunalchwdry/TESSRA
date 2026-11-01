@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, like, or, sql } from "drizzle-orm";
 import { cache } from "react";
 import { db } from "@/db";
 import * as t from "@/db/schema";
@@ -6,6 +6,7 @@ import type { CurrentUser } from "./auth";
 import { BOOKING_CATEGORIES, type RequestStatus, type Role } from "./constants";
 import { normalizeBookingPolicy } from "./booking-policy";
 import { getPublishedVersion, loadEngineState } from "./engine";
+import { parseNoticeMarker, type NoticeAudience, type NoticeCategory } from "./notices";
 import { validateExams, validateSessions, type Issue } from "./scheduler";
 
 export const getSettings = cache(async () => {
@@ -334,6 +335,77 @@ export async function listNotifications(userId: number, limit = 50) {
     .limit(limit);
 }
 
+export type NoticeCampaignView = {
+  id: number;
+  title: string;
+  body: string;
+  category: NoticeCategory;
+  audience: NoticeAudience;
+  departmentId: number | null;
+  delivered: number;
+  acknowledged: number;
+  createdAt: Date;
+  actorId: number | null;
+  actorName: string;
+};
+
+export async function listNoticeCampaigns(opts: { actorId?: number; limit?: number } = {}): Promise<NoticeCampaignView[]> {
+  const conditions = [eq(t.auditLogs.action, "notice.published"), eq(t.auditLogs.entityType, "notice")];
+  if (opts.actorId) conditions.push(eq(t.auditLogs.actorId, opts.actorId));
+  const campaigns = await db
+    .select({
+      id: t.auditLogs.id,
+      actorId: t.auditLogs.actorId,
+      actorName: t.users.name,
+      createdAt: t.auditLogs.createdAt,
+    })
+    .from(t.auditLogs)
+    .leftJoin(t.users, eq(t.users.id, t.auditLogs.actorId))
+    .where(and(...conditions))
+    .orderBy(desc(t.auditLogs.createdAt), desc(t.auditLogs.id))
+    .limit(opts.limit ?? 40);
+  if (!campaigns.length) return [];
+
+  const deliveries = await db
+    .select({
+      href: t.notifications.href,
+      title: t.notifications.title,
+      body: t.notifications.body,
+      read: t.notifications.read,
+    })
+    .from(t.notifications)
+    .where(or(...campaigns.map((campaign) => like(t.notifications.href, `notice:v1:${campaign.id}:%`))));
+  const byCampaign = new Map<number, typeof deliveries>();
+  for (const delivery of deliveries) {
+    const marker = parseNoticeMarker(delivery.href);
+    if (!marker) continue;
+    const list = byCampaign.get(marker.campaignId) ?? [];
+    list.push(delivery);
+    byCampaign.set(marker.campaignId, list);
+  }
+
+  const result: NoticeCampaignView[] = [];
+  for (const campaign of campaigns) {
+    const rows = byCampaign.get(campaign.id) ?? [];
+    const marker = parseNoticeMarker(rows[0]?.href);
+    if (!marker || !rows[0]) continue;
+    result.push({
+      id: campaign.id,
+      title: rows[0].title,
+      body: rows[0].body,
+      category: marker.category,
+      audience: marker.audience,
+      departmentId: marker.departmentId,
+      delivered: rows.length,
+      acknowledged: rows.filter((row) => row.read).length,
+      createdAt: campaign.createdAt,
+      actorId: campaign.actorId,
+      actorName: campaign.actorName ?? "System",
+    });
+  }
+  return result;
+}
+
 export async function listAudit(opts: { entityType?: string; limit?: number } = {}) {
   const [rows, ref] = await Promise.all([
     db
@@ -365,10 +437,13 @@ export const getNavBadges = cache(async (user: CurrentUser): Promise<Record<stri
   }
   if (user.role === "coordinator") {
     const ids = (await db.select({ id: t.users.id }).from(t.users).where(and(eq(t.users.role, "faculty"), eq(t.users.departmentId, user.departmentId ?? -1)))).map((x) => x.id);
-    const approvals = ids.length
-      ? await count(db.select({ n }).from(t.changeRequests).where(and(eq(t.changeRequests.status, "pending"), inArray(t.changeRequests.facultyId, ids))))
-      : 0;
-    return { approvals };
+    const [approvals, unread] = await Promise.all([
+      ids.length
+        ? count(db.select({ n }).from(t.changeRequests).where(and(eq(t.changeRequests.status, "pending"), inArray(t.changeRequests.facultyId, ids))))
+        : Promise.resolve(0),
+      count(db.select({ n }).from(t.notifications).where(and(eq(t.notifications.userId, user.id), eq(t.notifications.read, false)))),
+    ]);
+    return { approvals, notifications: unread };
   }
   const unread = await count(
     db.select({ n }).from(t.notifications).where(and(eq(t.notifications.userId, user.id), eq(t.notifications.read, false))),

@@ -14,6 +14,7 @@ import {
   ClipboardCheck,
   GraduationCap,
   MapPin,
+  Megaphone,
   ScrollText,
   Settings,
   ShieldCheck,
@@ -39,6 +40,7 @@ import { CHANGE_TYPE_LABEL, DAY_SHORT, DAYS, ROOM_TYPE_LABEL, categoryLabel } fr
 import type { ProposedChange, RoomRow, SlotRef } from "@/db/schema";
 import type { AuditView, BookingView, ChangeRequestView, DisruptionView } from "@/lib/queries";
 import type { BookingConflict } from "@/lib/engine";
+import { NOTICE_CATEGORY_LABEL, parseNoticeMarker, type NoticeCategory } from "@/lib/notices";
 import { cn, formatDate, formatRelative, periodLabel, periodTime, relativeDay } from "@/lib/utils";
 import { ConfirmAction, FormField, InlineAction } from "./client";
 import { Avatar, Badge, ButtonLink, EmptyState, PriorityBadge, Select, StatusBadge, Textarea } from "./ui";
@@ -71,6 +73,7 @@ const ENTITY_ICON: Record<string, LucideIcon> = {
   room: Building,
   exam: GraduationCap,
   academics: GraduationCap,
+  notice: Megaphone,
   settings: Settings,
 };
 
@@ -107,6 +110,15 @@ const NOTE_TONE = {
   info: "bg-info-bg text-info-fg",
 };
 
+const NOTICE_BADGE_TONE: Record<NoticeCategory, "danger" | "warning" | "success" | "info" | "neutral"> = {
+  urgent: "danger",
+  timetable: "warning",
+  room: "warning",
+  exam: "warning",
+  event: "success",
+  general: "info",
+};
+
 export function NotificationList({
   items,
   actions = true,
@@ -116,34 +128,47 @@ export function NotificationList({
   actions?: boolean;
   empty?: string;
 }) {
-  if (!items.length) return <EmptyState icon={Bell} title={empty} description="New updates about your requests and schedule will appear here." compact />;
+  if (!items.length) return <EmptyState icon={Megaphone} title={empty} description="Targeted notices and operational updates will appear here." compact />;
   return (
     <ul className="divide-y divide-line">
-      {items.map((n) => (
-        <li key={n.id} className={cn("flex gap-3 px-5 py-3.5 transition-colors", !n.read && "bg-brand-50/40")}>
-          <span className={cn("mt-0.5 grid size-8 shrink-0 place-items-center rounded-full", NOTE_TONE[n.tone])}>
-            <Bell className="size-4" aria-hidden />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <p className={cn("text-[13px] text-ink", !n.read ? "font-semibold" : "font-medium")}>{n.title}</p>
-              {!n.read && <Badge tone="brand" dot>Unread</Badge>}
+      {items.map((n) => {
+        const notice = parseNoticeMarker(n.href);
+        const viewHref = notice ? null : n.href;
+        return (
+          <li key={n.id} className={cn("flex gap-3 px-5 py-3.5 transition-colors", !n.read && "bg-brand-50/40")}>
+            <span className={cn("mt-0.5 grid size-8 shrink-0 place-items-center rounded-full", NOTE_TONE[n.tone])}>
+              {notice ? <Megaphone className="size-4" aria-hidden /> : <Bell className="size-4" aria-hidden />}
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className={cn("text-[13px] text-ink", !n.read ? "font-semibold" : "font-medium")}>{n.title}</p>
+                {notice && <Badge tone={NOTICE_BADGE_TONE[notice.category]}>{NOTICE_CATEGORY_LABEL[notice.category]}</Badge>}
+                {!n.read && <Badge tone="brand" dot>{notice ? "Needs acknowledgement" : "Unread"}</Badge>}
+                {notice && n.read && <Badge tone="outline">Acknowledged</Badge>}
+              </div>
+              <p className="mt-0.5 text-[13px] leading-5 text-ink-2">{n.body}</p>
+              <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-ink-3">
+                <time dateTime={n.createdAt.toISOString()}>{formatRelative(n.createdAt)}</time>
+                {viewHref && (
+                  <Link href={viewHref} className="inline-flex items-center gap-1 font-medium text-brand-700 hover:text-brand-800 hover:underline">
+                    View <ArrowRight className="size-3" aria-hidden />
+                  </Link>
+                )}
+              </div>
             </div>
-            <p className="mt-0.5 text-[13px] leading-5 text-ink-2">{n.body}</p>
-            <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-ink-3">
-              <time dateTime={n.createdAt.toISOString()}>{formatRelative(n.createdAt)}</time>
-              {n.href && (
-                <Link href={n.href} className="inline-flex items-center gap-1 font-medium text-brand-700 hover:text-brand-800 hover:underline">
-                  View <ArrowRight className="size-3" aria-hidden />
-                </Link>
-              )}
-            </div>
-          </div>
-          {actions && !n.read && (
-            <InlineAction action={markNotificationReadAction} fields={{ id: n.id }} variant="ghost" size="icon-sm" icon={<Check />} label={`Mark “${n.title}” as read`} />
-          )}
-        </li>
-      ))}
+            {actions && !n.read && (
+              <InlineAction
+                action={markNotificationReadAction}
+                fields={{ id: n.id }}
+                variant="ghost"
+                size="icon-sm"
+                icon={<Check />}
+                label={notice ? `Acknowledge “${n.title}”` : `Mark “${n.title}” as read`}
+              />
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

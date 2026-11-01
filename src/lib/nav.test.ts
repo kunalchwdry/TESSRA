@@ -19,8 +19,10 @@ test("common judge tasks are directly discoverable in role navigation", () => {
   assert(admin.some((item) => item.href === "/admin/venues"));
   assert(admin.some((item) => item.href === "/admin/official"));
   assert(admin.some((item) => item.href === "/admin/approvals"));
+  assert(admin.some((item) => item.href === "/admin/notices"));
   const coordinator = NAV.coordinator.flatMap((section) => section.items);
   assert(coordinator.some((item) => item.href === "/coordinator/approvals" && item.badge === "approvals"));
+  assert(coordinator.some((item) => item.href === "/coordinator/notices" && item.badge === "notifications"));
 });
 
 test("longest matching route controls active navigation", () => {

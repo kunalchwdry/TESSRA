@@ -57,6 +57,7 @@ export const NAV: Record<Role, NavSection[]> = {
       items: [
         { label: "Access Requests", href: "/admin/access-requests", icon: "approvals" },
         { label: "Approval Centre", href: "/admin/approvals", icon: "approvals", badge: "approvals" },
+        { label: "Notices", href: "/admin/notices", icon: "notifications" },
         { label: "Audit & History", href: "/admin/audit", icon: "audit" },
         { label: "Settings", href: "/admin/settings", icon: "settings" },
       ],
@@ -77,6 +78,7 @@ export const NAV: Record<Role, NavSection[]> = {
       title: "Governance",
       items: [
         { label: "Approval Centre", href: "/coordinator/approvals", icon: "approvals", badge: "approvals" },
+        { label: "Notices", href: "/coordinator/notices", icon: "notifications", badge: "notifications" },
         { label: "Reports", href: "/coordinator/reports", icon: "reports" },
       ],
     },
@@ -97,7 +99,7 @@ export const NAV: Record<Role, NavSection[]> = {
       title: "Assist",
       items: [
         { label: "AI Assistant", href: "/faculty/assistant", icon: "assistant" },
-        { label: "Notifications", href: "/faculty/notifications", icon: "notifications", badge: "notifications" },
+        { label: "Notices", href: "/faculty/notifications", icon: "notifications", badge: "notifications" },
       ],
     },
   ],
@@ -115,7 +117,7 @@ export const NAV: Record<Role, NavSection[]> = {
       items: [
         { label: "My Bookings", href: "/club/bookings", icon: "bookings", badge: "bookings" },
         { label: "Booking History", href: "/club/history", icon: "history" },
-        { label: "Notifications", href: "/club/notifications", icon: "notifications", badge: "notifications" },
+        { label: "Notices", href: "/club/notifications", icon: "notifications", badge: "notifications" },
       ],
     },
   ],

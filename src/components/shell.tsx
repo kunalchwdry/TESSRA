@@ -387,7 +387,7 @@ export function AppFrame({
     return () => { document.body.style.overflow = previous; };
   }, [palette]);
 
-  const notificationsHref = role === "faculty" ? "/faculty/notifications" : role === "club" ? "/club/notifications" : null;
+  const notificationsHref = role === "faculty" ? "/faculty/notifications" : role === "club" ? "/club/notifications" : role === "coordinator" ? "/coordinator/notices" : null;
   const approvalsHref = role === "admin" ? "/admin/approvals" : role === "coordinator" ? "/coordinator/approvals" : null;
   const unread = badges.notifications ?? 0;
   const approvals = badges.approvals ?? 0;
@@ -485,8 +485,8 @@ export function AppFrame({
               <Link
                 href={notificationsHref}
                 className={buttonClasses("ghost", "icon-sm", "relative")}
-                aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}
-                title="Notifications"
+                aria-label={unread ? `Notices, ${unread} unacknowledged` : "Notices"}
+                title="Notices"
               >
                 <Bell aria-hidden />
                 {unread > 0 && <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-brand-500 ring-2 ring-surface" aria-hidden />}

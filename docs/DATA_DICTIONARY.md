@@ -53,6 +53,21 @@ Basket semantics: all sessions sharing `basket_slot` (OEB-1/2/3) run at the same
 
 Demo workspaces: `settings, departments, clubs, users, auth_sessions, rooms, student_groups, courses, offerings, schedule_versions, scheduled_sessions, availability_blocks, change_requests, bookings, exams, disruptions, notifications, audit_logs, assistant_messages`.
 
+### Targeted notice campaigns (existing tables, no migration)
+
+A publication inserts one `audit_logs` parent with `action = notice.published` and `entity_type = notice`, then one private `notifications` delivery per approved recipient in the same transaction. Admin audiences are `all`, `faculty`, `coordinator`, `club`, or one department. Coordinator publications are forcibly scoped server-side to the authenticated Coordinator’s own department.
+
+| Existing column | Notice use |
+|---|---|
+| `notifications.user_id` | the only account allowed to read/acknowledge this private delivery |
+| `notifications.title`, `body`, `tone` | validated notice copy and category-derived presentation |
+| `notifications.read` | idempotent acknowledgement state |
+| `notifications.href` | strict internal marker `notice:v1:<audit-id>:<category>:<audience>:<department-id-or-0>`; recognised as metadata and never rendered as a link |
+| `audit_logs.id` | stable campaign identifier used to aggregate delivery/read totals |
+| `audit_logs.actor_id` | Admin or Coordinator publisher |
+
+Regular operational notifications retain their normal URL in `href` and continue to render a **View** action.
+
 Official pipeline: **`official_runs`**
 | Column | Type | Meaning |
 |---|---|---|

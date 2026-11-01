@@ -15,6 +15,7 @@ const TYPES: { key: string; label: string }[] = [
   { key: "booking", label: "Bookings" },
   { key: "change_request", label: "Change requests" },
   { key: "disruption", label: "Disruptions" },
+  { key: "notice", label: "Notices" },
   { key: "room", label: "Venues" },
   { key: "exam", label: "Examinations" },
   { key: "academics", label: "Academics" },

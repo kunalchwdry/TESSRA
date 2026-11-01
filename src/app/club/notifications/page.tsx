@@ -7,7 +7,7 @@ import { markAllNotificationsReadAction } from "@/lib/actions";
 import { requireRole } from "@/lib/auth";
 import { listNotifications } from "@/lib/queries";
 
-export const metadata: Metadata = { title: "Notifications" };
+export const metadata: Metadata = { title: "Notices" };
 
 export default async function ClubNotificationsPage() {
   const user = await requireRole("club");
@@ -17,18 +17,18 @@ export default async function ClubNotificationsPage() {
     <>
       <PageHeader
         eyebrow={user.clubName ?? "Club"}
-        title="Notifications"
-        description="Booking decisions, venue changes and reminders."
+        title="Notices"
+        description="Targeted announcements, booking decisions, venue changes and reminders."
         actions={
           unread > 0 ? (
             <InlineAction action={markAllNotificationsReadAction} fields={{ all: 1 }} size="md" icon={<CheckCheck />}>
-              Mark all as read
+              Acknowledge all
             </InlineAction>
           ) : undefined
         }
       />
       <Card>
-        <CardHeader title="All notifications" description={unread ? `${unread} unread of ${items.length}` : `${items.length} notifications · all read`} />
+        <CardHeader title="Notice inbox" description={unread ? `${unread} awaiting acknowledgement of ${items.length}` : `${items.length} notices · all acknowledged`} />
         <NotificationList items={items} />
       </Card>
     </>

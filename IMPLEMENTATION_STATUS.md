@@ -39,6 +39,15 @@ See `docs/CONSTRAINT_VERIFICATION.md` and `exports/report*.json`.
 - Submit-time validation plus coordinator approval before any timetable change.
 - The LLM has no database tool and never decides validity.
 
+### Targeted smart notices
+
+- Admins publish Urgent, Timetable, Room, Exam, Event or General notices to all inbox users, one role, or one department.
+- Coordinators can publish only to approved Faculty/Coordinator accounts in their own authenticated department; submitted scope fields cannot widen delivery.
+- Each recipient receives a private notice row and can acknowledge only their own copy.
+- Admin and Coordinator campaign views show delivered/read totals; every publication has a `notice.published` audit event.
+- Existing booking, timetable and workflow alerts remain in the same Notices inbox.
+- Uses the existing `notifications` and `audit_logs` schema; no production database migration is required.
+
 ### Admin reset
 
 - A visible **Reset demo data** action is on `/admin` and Settings.
@@ -49,18 +58,18 @@ See `docs/CONSTRAINT_VERIFICATION.md` and `exports/report*.json`.
 
 ### Role workspaces
 
-- Admin: dashboard, scheduling editor, approvals, bookings, exams, venues, disruptions, official CIT pipeline, audit, account management and reset.
-- Coordinator: department schedule, faculty, approvals, resources and event requests.
-- Faculty: timetable, availability, natural-language assistant, requests and coursework.
-- Club: venue discovery, English/Hinglish request intake, bookings, history and notifications.
+- Admin: dashboard, scheduling editor, approvals, bookings, exams, venues, disruptions, targeted notice publishing/metrics, official CIT pipeline, audit, account management and reset.
+- Coordinator: department schedule, faculty, approvals, resources, event requests, department notice publishing and a notice inbox.
+- Faculty: timetable, availability, natural-language assistant, requests, coursework and a notice inbox.
+- Club: venue discovery, English/Hinglish request intake, bookings, history and a notice inbox.
 - Supabase Auth in production with a custom-session fallback for local PostgreSQL setups.
 - Server-side role checks on protected pages, route handlers and server actions.
 
 ## Automated checks
 
 ```text
-python -m pytest engine/tests -q   31 passed
-npm run test:parser                7 passed
+python -m pytest engine/tests -q   33 passed
+npm run test:unit                  58 passed
 npm run typecheck                  0 errors
 npm run lint                       0 problems
 npm run build                      success
@@ -70,7 +79,7 @@ npm audit --omit=dev               0 production vulnerabilities
 ## Known limitations
 
 1. The role workspaces use a compact Westbrook demo dataset; the complete official CIT world is the dedicated `/admin/official` pipeline.
-2. The UI loads the committed official dataset and sample disruption rather than accepting arbitrary replacement JSON uploads.
+2. There are no student login accounts in the current four-role model, so department notices target approved Faculty and Coordinator accounts rather than individual students.
 3. The full CIT timetable grid is read-only; manual edits are supported and validated in the demo scheduling workspace.
 4. Booking and conflict explanations exist, but there is no full CP-SAT proof explanation for every individual class placement.
 5. CP-SAT solve quality can vary when a production run reaches its time limit; the committed optimal export remains the reproducible scoring artifact.
