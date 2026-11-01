@@ -221,7 +221,10 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 - **English/Hinglish booking intake** — fills the real editable form, exposes assumptions, asks for missing essentials and revalidates on submit
 - **Faculty AI schedule assistant** — optional LLM intent proposal, deterministic constraint validation, human submission and coordinator approval
 - **CP-SAT engine** — exact H1–H14 model and S1–S6 objective, official booking/exam allocation, and a lexicographic repair that proves the minimum number of baseline moves before optimizing soft quality
+- **Versioned organiser datasets** — Admins can upload a strict base JSON, solve and validate that exact immutable snapshot, see file/hash/version provenance, and repair against the same version
 - **Governed repair workflow** — upload any valid organiser change JSON, inspect the exact before/after diff, then approve or reject it; `schedule_after.json` stays locked until approval
+- **Editable booking priority** — Admin-defined unique category ranks order competing approvals and optional auto-approval
+- **Department-lab review** — coordinators approve/reject bookings only for labs owned by their department, with conflict checks, alternatives, notifications, and audit
 - **Safe Admin reset** — one-click clean demo state with complete timetable regeneration; accounts/reference data and the active login are preserved
 - **Demo accounts** — four pre-seeded accounts for evaluation
 
@@ -230,7 +233,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 ## Known limitations
 
 - The four role workspaces use a compact seeded campus dataset for fast judging; the full official CIT dataset, bookings, exams, validator report and disruption repair are presented under `/admin/official`.
-- The official workflow intentionally fixes the organiser-provided CIT dataset as the grading source. Admins can upload arbitrary organiser-format disruption JSON (all five supported change types); replacement base-dataset upload is not exposed.
+- The official workbench defaults to the organiser-provided CIT dataset but also accepts strict organiser-format base uploads as isolated versioned runs. Such uploads do not overwrite the compact relational records used by the four interactive role workspaces.
 - Production deploys the included FastAPI/OR-Tools engine as a private Vercel Python Service and injects `ENGINE_URL` through a service binding. Local development can use that URL or the Python subprocess fallback.
 - External LLM intent parsing is optional and requires a team-supplied key. The deterministic assistant, English/Hinglish booking parser and manual booking form work without it.
 

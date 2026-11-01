@@ -399,14 +399,14 @@ export async function buildBookingAnalyzer() {
     return out;
   }
 
-  function alternatives(b: BookingProbe, opts: { bookableOnly?: boolean; limit?: number } = {}) {
+  function alternatives(b: BookingProbe, opts: { bookableOnly?: boolean; includeLabs?: boolean; limit?: number } = {}) {
     return roomRows
       .filter(
         (r) =>
           r.id !== b.roomId &&
           r.status === "active" &&
           r.capacity >= b.attendees &&
-          r.type !== "lab" &&
+          (r.type !== "lab" || opts.includeLabs) &&
           r.type !== "exam_hall" &&
           (!opts.bookableOnly || r.bookable),
       )

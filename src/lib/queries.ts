@@ -3,7 +3,8 @@ import { cache } from "react";
 import { db } from "@/db";
 import * as t from "@/db/schema";
 import type { CurrentUser } from "./auth";
-import type { RequestStatus, Role } from "./constants";
+import { BOOKING_CATEGORIES, type RequestStatus, type Role } from "./constants";
+import { normalizeBookingPolicy } from "./booking-policy";
 import { getPublishedVersion, loadEngineState } from "./engine";
 import { validateExams, validateSessions, type Issue } from "./scheduler";
 
@@ -22,6 +23,14 @@ export const getSettings = cache(async () => {
     }
   );
 });
+
+export async function getBookingPriorityPolicy() {
+  const categories = BOOKING_CATEGORIES.map((item) => item.value);
+  const stored = await db.select().from(t.bookingPriorities).orderBy(t.bookingPriorities.priorityOrder);
+  const normalized = normalizeBookingPolicy(categories, stored);
+  const labels = new Map(BOOKING_CATEGORIES.map((item) => [item.value, item.label]));
+  return normalized.map((item) => ({ ...item, label: labels.get(item.category) ?? item.category }));
+}
 
 export const getPublished = cache(getPublishedVersion);
 
@@ -165,6 +174,8 @@ export type BookingView = t.BookingRow & {
   roomCode: string;
   roomName: string;
   roomCapacity: number;
+  roomType: t.RoomType | null;
+  roomDepartmentId: number | null;
   suggestedRoomCode: string | null;
   reviewerName: string | null;
 };
@@ -193,6 +204,8 @@ export async function listBookings(filter: { requesterId?: number; departmentId?
       roomCode: room?.code ?? "—",
       roomName: room?.name ?? "",
       roomCapacity: room?.capacity ?? 0,
+      roomType: room?.type ?? null,
+      roomDepartmentId: room?.departmentId ?? null,
       suggestedRoomCode: b.suggestedRoomId ? ref.roomMap.get(b.suggestedRoomId)?.code ?? null : null,
       reviewerName: b.reviewerId ? ref.personMap.get(b.reviewerId)?.name ?? null : null,
     };

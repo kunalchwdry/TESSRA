@@ -49,5 +49,8 @@
 - Bookings are allocated in strict priority order, so priority inversions are structurally avoided (validator confirms 0).
 - Only institute events may displace classes, and every displaced session must pass `check_assignment` in its new slot before the override is emitted.
 - Repairs use two CP-SAT phases: first minimize and prove the baseline-move count; then constrain that count to its optimum and minimize S1–S6. This is lexicographic, not an approximate weighted penalty.
-- Uploaded change JSON is schema/reference-validated in the Next.js boundary before the private engine is called. All five organiser change types are supported.
-- A repair row carries namespaced internal workflow metadata (`proposed`, `approved`, or `rejected`) inside its stored validator report. Export strips that metadata; proposal/rejection exports return HTTP 409, so only a separately approved Admin action can publish `schedule_after.json`.
+- Uploaded base-dataset JSON is strictly schema/reference-validated before the private engine is called. Its parsed snapshot, source name, SHA-256, loader and load time are versioned inside the run; both solver and untouched validator consume that same snapshot.
+- Uploaded change JSON is validated against the selected baseline snapshot. All five organiser change types are supported, and repair always reuses the immutable base version.
+- A run carries namespaced internal `_dataset` and/or `_workflow` metadata inside its stored validator report. Exports strip both; proposal/rejection exports return HTTP 409, so only a separately approved Admin action can publish `schedule_after.json`.
+- Operational booking-category ranks are a complete Admin-edited permutation. Approval and optional auto-approval defer overlapping same-venue requests when a higher-ranked (or earlier equal-ranked) request remains pending.
+- Coordinator lab-booking actions re-check that the requested and suggested rooms are labs owned by the authenticated coordinator’s department before writing, notifying, and auditing.

@@ -135,7 +135,7 @@ Information absent from the original message is not guessed. For example, a comp
 
 ## 7. Current test evidence
 
-- TypeScript unit tests: **44/44 passed**
+- TypeScript unit tests: **52/52 passed**
   - 25 booking parser
   - 3 calendar/lab-rule regression
   - 3 placement explanation
@@ -171,7 +171,7 @@ This estimate is conditional on submission eligibility. It is not a promise of a
 
 ## 9. Submission blockers and risks
 
-1. **Video link is not in the repository.** The statement makes a working walkthrough video a disqualification gate. A valid unlisted YouTube or viewable Drive link must be submitted through the required channel and should also be added to the README.
+1. **The already-recorded video link is not yet in the repository.** The statement makes a working walkthrough a disqualification gate. Its valid unlisted YouTube or viewable Drive URL must be submitted through the required channel and should also be added to the README.
 2. **Deadline status is unknown.** The rules disqualify deployments or pushes after the deadline. Do not make further submission changes if the official deadline has passed.
 3. **Optimisation marks are comparative.** Soft 3 is objectively excellent, but only organisers know the other teams' scores.
 4. **Do not submit the old ZIP.** Generate the clean archive from current tracked files only.

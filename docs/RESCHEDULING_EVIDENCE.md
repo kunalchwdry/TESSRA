@@ -58,7 +58,7 @@ The production baseline differs from the committed soft-optimal baseline, so its
 ## Automated checks
 
 - `python -m pytest engine/tests -q` → **33 passed**
-- `npm run test:unit` → **14 passed**
+- `npm run test:unit` → **52 passed**
 - `npm run typecheck` → **0 errors**
 - `npm run lint` → **0 problems**
 - `npm run build` → **successful**

@@ -36,14 +36,15 @@ Rejections are legitimate: BR-04 is on the official cancellations list; BR-09 ne
 
 ## 3. Web application
 ```
-npm run test:unit           → 44/44 tests passed (25 booking parser + 3 calendar/lab rules + 3 explanations + 3 LLM boundary + 3 navigation + 7 disruption/workflow tests)
+npm run test:unit           → 52/52 tests passed (25 booking parser + 4 booking policy + 3 calendar/lab + 3 explanations + 3 LLM boundary + 3 navigation + 4 dataset validation + 7 disruption/snapshot/workflow)
 npm run typecheck           → 0 errors
 npm run lint                → 0 problems
-npm run build               → all routes compiled (Next.js 16.4.3 App Router)
+DATABASE_URL='postgresql://user:pass@localhost:5432/tessra' npm run build
+                           → all routes compiled (dummy compile-time URL only; Next.js 16.4.3 App Router)
 npm audit --omit=dev        → 0 production vulnerabilities
 ```
 
-Parser tests cover English ranges; Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`; English and Romanised-Hindi number words; month-first dates; 24-hour/named clocks; flexible, vague, earliest-start and latest-finish constraints; ordered venue fallbacks; negated equipment; recurrence; priority impersonation; policy-bypass wording; missing essentials; and the UTC-to-Asia/Kolkata boundary used on serverless hosts. Explanation tests ensure hard validity, fixed constraints and global heuristics are described without false causal claims. LLM-boundary tests reject malformed/unknown intents and strip injected fields. Navigation tests prove every role-menu destination maps to a real route and key judge tasks remain exposed. Disruption tests cover the supplied sample, all five supported change types, references to newly added entities, wrong-dataset files, unknown entities/types/fields, and malformed added sessions.
+Parser tests cover English ranges; Hinglish `kal`/`shaam`/`baje`/`ghante`/`log`; English and Romanised-Hindi number words; month-first dates; 24-hour/named clocks; flexible, vague, earliest-start and latest-finish constraints; ordered venue fallbacks; negated equipment; recurrence; priority impersonation; policy-bypass wording; missing essentials; and the UTC-to-Asia/Kolkata boundary used on serverless hosts. Booking-policy tests verify complete unique rank permutations, rank/timestamp precedence for overlapping requests, and department-lab scope. Dataset tests accept the untouched CIT source while rejecting duplicate IDs, broken references, malformed calendar data, unknown root/nested fields, and undeclared role/category values. Explanation tests ensure hard validity, fixed constraints and global heuristics are described without false causal claims. LLM-boundary tests reject malformed/unknown intents and strip injected fields. Navigation tests prove every role-menu destination maps to a real route and key judge tasks remain exposed. Disruption tests cover the supplied sample, all five supported change types, references to newly added entities, wrong-dataset files, unknown entities/types/fields, malformed added sessions, immutable snapshot retrieval, and metadata stripping.
 
 ## 4. Runtime & security checks (executed against production)
 - Every route of all four roles → HTTP 200 with real data; anon → `/login`; wrong role → own workspace; exports 403 for unauthorized roles.

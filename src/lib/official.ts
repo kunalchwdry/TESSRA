@@ -29,6 +29,8 @@ export type OfficialDataset = {
     periods: { id: number; start: string; end: string; teaching: boolean }[];
     lunch: { after_period: number; start: string; end: string };
     lab_start_periods: number[];
+    event_only_periods?: number[];
+    fest_week?: string;
     exam_week: { days: string[]; sessions: { id: string; start?: string; end?: string }[] };
   };
   priority_order: string[];
@@ -36,16 +38,16 @@ export type OfficialDataset = {
   rooms: { id: string; name: string; building: string; type: string; capacity: number; features: string[]; accessible: boolean; allowed_uses: string[] }[];
   room_unavailability: { room_id: string; day: string; periods: number[]; reason?: string }[];
   faculty: { id: string; name: string; department: string; max_hours_per_day: number; needs_accessible: boolean; unavailable: { day: string; periods: number[]; reason?: string }[]; preferences: unknown[] }[];
-  student_groups: { id: string; name: string; year: number; department: string; size: number }[];
-  courses: { id: string; title?: string; name?: string }[];
+  student_groups: { id: string; name: string; year: number; department: string; size: number; needs_accessible: boolean }[];
+  courses: { id: string; title?: string; name?: string; department: string; year: number; lecture_hours: number; tutorial_hours: number; lab_blocks: number }[];
   sessions: { id: string; course_id: string; kind: "lecture" | "tutorial" | "lab"; groups: string[]; faculty_id: string; size: number; duration: number; room_types: string[]; needs_accessible: boolean; basket_slot: string | null; fixed_slot: { day: string; start_period: number } | null }[];
   booking_requests: OfficialBookingRequest[];
-  cancellations: { request_id: string; note?: string }[];
+  cancellations: { request_id: string; cancelled_at?: string; by?: string; note?: string }[];
   exams: { id: string; course_ids: string[]; groups: string[]; size: number; duration_hours: number }[];
 };
 
 export type OfficialBookingRequest = {
-  id: string; submitted_at: string; requester: string; role: string; requested_category: string;
+  id: string; submitted_at: string; requester: string; role: string; department: string | null; requested_category: string;
   title: string; attendance: number; duration_periods: number;
   windows: { day: string; from_period: number; to_period: number }[];
   room_types: string[]; needs: string[]; requested_room: string | null;
@@ -134,8 +136,8 @@ export async function runEngine(opts: { data: OfficialDataset; disruption?: unkn
 }
 
 /** Runs the untouched official validator and returns its JSON report. */
-export async function runOfficialValidator(opts: { schedule: OfficialSchedule; disruption?: unknown; baseline?: OfficialSchedule }): Promise<ValidatorReport> {
-  const dataFile = DATA_PATH;
+export async function runOfficialValidator(opts: { data?: OfficialDataset; schedule: OfficialSchedule; disruption?: unknown; baseline?: OfficialSchedule }): Promise<ValidatorReport> {
+  const dataFile = opts.data ? await tempJson("tessra-data", opts.data) : DATA_PATH;
   const schedFile = await tempJson("tessra-sched", opts.schedule);
   const reportFile = path.join(os.tmpdir(), `tessra-report-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
   const args = [VALIDATOR_PATH, "--data", dataFile, "--schedule", schedFile, "--json", reportFile, "--quiet"];
@@ -185,7 +187,7 @@ export async function runOfficialPipeline(opts: {
   }
 
   const schedule = await runEngine(opts);
-  const report = await runOfficialValidator({ schedule, disruption: opts.disruption, baseline: opts.baseline });
+  const report = await runOfficialValidator({ data: opts.data, schedule, disruption: opts.disruption, baseline: opts.baseline });
   return { schedule, report };
 }
 
