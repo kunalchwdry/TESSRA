@@ -1,0 +1,26 @@
+TESSRA LIVE PRODUCT WALKTHROUGH — NARRATION TRANSCRIPT
+Duration: 4 minutes 42.94 seconds
+
+1. Campus scheduling problem and official scale
+A campus timetable is a network of people, rooms, groups, events, and exams. TESSRA turns that complexity into one governed workflow. The official Chilika Institute dataset contains twenty-seven rooms, forty faculty, fourteen groups, sixty-two courses, one hundred and eighty-nine sessions, twenty-five booking requests, and forty-one exams. This walkthrough combines the working product with concise technical evidence.
+
+2. Live Admin dashboard, scheduling, and venue search
+We begin in the real application. Role-based sign-in opens the correct workspace without exposing another role's actions. The Admin dashboard combines six live campus-health indicators, pending approvals, academic activity, and fast links to common operations. In Smart Scheduling, the published timetable can be read by student group, faculty member, or room. Changing the view immediately queries the same validated schedule. The venue finder then combines room type, capacity, features, date, time, maintenance, classes, exams, and approved events, so an apparently empty room is never offered when another campus commitment already occupies it.
+
+3. Live Club booking and approval workflow
+The Club workspace demonstrates an end-to-end booking. A representative describes the request in ordinary English or Hinglish. TESSRA extracts date, time, attendance, equipment, and the preferred venue into an editable draft; nothing is booked automatically. Priority remains code-controlled, so prompt text cannot impersonate a higher authority or bypass approval. On submission, the server checks timetable occupancy, exams, existing bookings, room fit, mandatory groups, lead time, and role policy. The request then appears in the Admin queue, where approval is revalidated at the moment of decision and the requester receives a tracked outcome.
+
+4. Live examinations, notices, campus health, and disruptions
+The same operational model supports examinations, targeted notices, and disruptions. Exam screens expose room capacity, groups, invigilation, and conflicts before publication. Notices can target a role or department and record acknowledgement. Campus Health stays intentionally compact, summarizing academic progress, faculty availability, room use, pending work, events, and scheduling efficiency. For an absence or room outage, TESSRA presents a before-and-after plan and keeps the timetable unchanged until an Admin approves it.
+
+5. Architecture and hard constraints H1–H7
+Behind these screens, organiser JSON is schema-checked, cross-referenced, hashed, and stored with an immutable run. A private Python service uses Google OR-Tools CP-SAT, while the untouched organiser validator checks the export independently. H one places every session exactly once. H two prevents faculty overlap. H three prevents student-group overlap while counting an elective basket once. H four prevents room overlap across teaching, events, and exams. H five enforces capacity, with exam capacity halved. H six enforces room type, and H seven excludes every faculty-unavailable period.
+
+6. Hard constraints H8–H14 and optimization S1–S6
+H eight excludes room unavailability. H nine allows teaching only in P one through P nine, blocks lunch crossing, and starts three-hour labs only at P two or P six. H ten guarantees accessibility. H eleven synchronizes elective baskets. H twelve caps faculty daily hours. H thirteen allocates approved bookings by official priority while checking classes, rooms, bookings, and mandatory groups. H fourteen preserves fixed sessions. Only then are S one through S six optimized: faculty avoidance weight two, group gaps weight one, days above six hours weight three, repeated course weight three, rooms below forty percent use weight one, and P nine weight one.
+
+7. Live official validator and minimum-move repair
+The Official Dataset workbench makes that evidence visible inside the product. The baseline report shows zero hard violations, soft penalty three, exam penalty zero, and a booking score of sixty-five point five out of seventy, with twenty-one approvals, two alternatives, two rejections, and zero priority inversions. For the supplied disruption, repair is lexicographic. Phase one proves the minimum number of moved baseline sessions. Phase two fixes that count and optimizes the soft goals. The live diff shows eight necessary moves: two time changes and six room-only changes. Export stays locked until separate approval.
+
+8. Executed results and close
+The executed result places all one hundred and eighty-nine sessions, covering two hundred and forty-three teaching hours, and all forty-one exams. Both baseline and repair have zero hard violations and soft penalty three. Thirty-three Python tests and sixty-four TypeScript tests protect the engine and product rules. TESSRA is therefore not only a timetable generator; it is a working, role-aware campus operating system whose important decisions are validated, explained, and auditable.

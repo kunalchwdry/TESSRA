@@ -11,9 +11,24 @@ Built for the Crunch Week problem statement (Chilika Institute of Technology): t
 | Service | URL |
 |---------|-----|
 | **Production (Vercel)** | https://tessra-five.vercel.app |
+| **CIT Official Dataset workspace** | https://tessra-five.vercel.app/admin/official |
+| **CIT problem statement** | [`official/problem-statement.txt`](./official/problem-statement.txt) |
+| **Official CIT dataset** | [`cit_public.json`](./official/starterpack/CrunchWeek_StarterPack/data/cit_public.json) |
 | **GitHub Repository** | https://github.com/kunalchwdry/TESSRA.git |
 
-> ⚠️ **No public registration.** Use the demo accounts below (password for all: `tessra123`).
+> ⚠️ **No public registration.** Use the demo accounts below (password for all: `tessra123`). The CIT workbench is available after signing in with the Administrator demo account.
+
+---
+
+## 🎬 Live Product Walkthrough
+
+[![Watch the TESSRA live product walkthrough](./docs/media/TESSRA_Live_Product_Walkthrough_Poster.jpg)](https://raw.githubusercontent.com/kunalchwdry/TESSRA/main/docs/media/TESSRA_Live_Product_Walkthrough.mp4)
+
+**[▶ Watch the 4:42 live website walkthrough](https://raw.githubusercontent.com/kunalchwdry/TESSRA/main/docs/media/TESSRA_Live_Product_Walkthrough.mp4)** · [Download MP4](./docs/media/TESSRA_Live_Product_Walkthrough.mp4) · [Captions](./docs/media/TESSRA_Live_Walkthrough_Captions.srt) · [Transcript](./docs/media/TESSRA_Live_Walkthrough_Transcript.txt)
+
+The recording demonstrates the working application: role-based sign-in, Admin Campus Health, timetable view switching, live venue search, English booking intake, server-validated submission and approval, examinations, notices, faculty availability, the official validator report, and minimum-move disruption repair. Presentation frames are limited to the system architecture, H1–H14, S1–S6, and executed evidence.
+
+For the full engineering rationale, model formulation, and verification boundary, see **[APPROACH.md](./APPROACH.md)**.
 
 ---
 
@@ -201,7 +216,8 @@ engine/          — CP-SAT model (hard H1–H14, soft S1–S6), bookings, exams
 official/        — Untouched starter pack + problem statement
 exports/         — App-produced schedule.json, schedule_after.json, validator reports
 src/             — Next.js App Router: four role workspaces, auth, audit, targeted notices
-docs/            — requirements, architecture, deployment, testing and submission audit evidence
+docs/            — requirements, architecture, testing, submission evidence, and walkthrough media
+APPROACH.md      — technical design, model formulation, optimization, repair, and verification strategy
 access.md        — Complete access credentials (this repo)
 AI_USAGE.md      — Full AI declaration
 IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
@@ -242,6 +258,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 
 ## 📄 Documentation
 
+- [`APPROACH.md`](./APPROACH.md) — Technical approach, CP-SAT formulation, governance, and validation strategy
 - `docs/ARCHITECTURE.md` — System design and component overview
 - `docs/CAMPUS_HEALTH.md` — Operational-health indicators, weights, formulas and status bands
 - `docs/DEPLOYMENT.md` — Vercel + Supabase deployment guide
