@@ -28,7 +28,7 @@
 ## Layers
 - **UI**: `src/components` design system (tokens in `globals.css`), role shell, timetable grids.
 - **Application**: `src/app/**` pages + `src/lib/*-actions.ts` server actions; every action starts with `requireRole(...)`. Targeted notices use the existing `notifications` rows as private per-recipient deliveries and `audit_logs` as campaign parents.
-- **Domain**: demo engine (`src/lib/engine.ts`, `scheduler.ts`), notice validation/audience policy (`src/lib/notices.ts`), and official integration (`src/lib/official.ts`, `official-actions.ts`).
+- **Domain**: demo engine (`src/lib/engine.ts`, `scheduler.ts`), deterministic operational-health scoring (`src/lib/campus-health.ts`), notice validation/audience policy (`src/lib/notices.ts`), and official integration (`src/lib/official.ts`, `official-actions.ts`).
 - **Scheduling service**: `engine/` is standalone Python — CP-SAT model, deterministic booking/exam allocators, independent `check_assignment`, CLI + FastAPI. In production it is a private Vercel Python Service bound to the web service; it never touches the app database and receives only the submitted dataset/baseline/change data.
 - **Validation authority**: the organisers' `validator.py`. The isolated deployment contains a byte-identical copy, enforced by regression test; `/solve-validated` returns its report with the schedule. The app stores and displays that report verbatim, and a run with violations is shown as invalid rather than hidden.
 
@@ -56,3 +56,4 @@
 - Coordinator lab-booking actions re-check that the requested and suggested rooms are labs owned by the authenticated coordinator’s department before writing, notifying, and auditing.
 - Notice publication is server-authorized and atomic: Admins may choose role/department audiences, while Coordinator input is ignored for scope and forcibly bound to the authenticated account’s department. Only approved non-Admin recipients receive a private row; acknowledgement updates are constrained by both notification ID and current user ID.
 - Notice campaigns intentionally reuse the existing schema. A strict non-navigable `notice:v1:<audit-id>:<category>:<audience>:<department>` marker in `notifications.href` links delivery rows to their `notice.published` audit event; normal links remain unaffected. This avoids a production database migration.
+- Campus health is a read-only request-time projection over existing tables. Six independently scored indicators expose their raw values, sources, weights and formulas; the overall value is a normalized weighted mean of only the indicators with real source data. It sends no data to an AI or external analytics service.

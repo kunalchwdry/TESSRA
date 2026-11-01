@@ -426,6 +426,10 @@ async function count(query: Promise<{ n: number }[]>) {
 }
 const n = sql<number>`count(*)::int`;
 
+export async function getPendingAccessRequestCount() {
+  return count(db.select({ n }).from(t.accessRequests).where(eq(t.accessRequests.status, "pending")));
+}
+
 export const getNavBadges = cache(async (user: CurrentUser): Promise<Record<string, number>> => {
   if (user.role === "admin") {
     const [bookings, requests, disruptions] = await Promise.all([

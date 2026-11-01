@@ -216,6 +216,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 - **Instant account creation** — admin can create accounts directly at `/admin/create-account`
 - **Supabase Auth** — email/password auth with email confirmation enabled
 - **Targeted smart notices** — Admins publish by role or department; Coordinators are server-scoped to their own department; recipients acknowledge private inbox copies and publishers see delivery/read totals without a database migration
+- **Campus operational health** — live Admin score across academic progress, faculty availability, room utilisation, pending requests, event activity and scheduling efficiency, with every weight/source/formula visible
 - **Audit logs** — complete audit trail of all actions, including notice publication
 - **Timetable/booking validation** — conflict-checked with suggested alternatives
 - **English/Hinglish booking intake** — fills the real editable form, exposes assumptions, asks for missing essentials and revalidates on submit
@@ -242,6 +243,7 @@ IMPLEMENTATION_STATUS.md — What works, what's tested, what's pending
 ## 📄 Documentation
 
 - `docs/ARCHITECTURE.md` — System design and component overview
+- `docs/CAMPUS_HEALTH.md` — Operational-health indicators, weights, formulas and status bands
 - `docs/DEPLOYMENT.md` — Vercel + Supabase deployment guide
 - `docs/DATA_DICTIONARY.md` — All 26 tables and their fields
 - `docs/REQUIREMENTS_TRACEABILITY.md` — Requirement → implementation mapping

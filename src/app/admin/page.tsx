@@ -2,15 +2,18 @@ import { Activity, ArrowRight, Building, CalendarClock, CalendarDays, FlaskConic
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ActionForm, SubmitButton } from "@/components/client";
+import { CampusHealthDashboard } from "@/components/campus-health";
 import { ActivityFeed, UpcomingBookingRow } from "@/components/domain";
 import { ResetDemoDataButton } from "@/components/reset-demo-data";
 import { Avatar, Badge, BarList, ButtonLink, Card, CardHeader, EmptyState, PageHeader, PriorityBadge, ProgressBar, StatCard } from "@/components/ui";
 import { prepareApprovalDemoAction } from "@/lib/actions";
 import { requireRole } from "@/lib/auth";
-import { DAYS } from "@/lib/constants";
-import { getExams, getPublishedTimetable, getRef, getSettings, listAudit, listBookings, listChangeRequests, listDisruptions } from "@/lib/queries";
+import { buildCampusHealthReport } from "@/lib/campus-health";
+import { DAYS, PERIODS } from "@/lib/constants";
+import { getCourseworkOversight } from "@/lib/coursework";
+import { getExams, getPendingAccessRequestCount, getPublishedTimetable, getRef, getSettings, listAudit, listBookings, listChangeRequests, listDisruptions } from "@/lib/queries";
 import { ISSUE_LABEL } from "@/lib/scheduler";
-import { currentDayIndex, firstName, formatDate, formatRelative, pct, plural, relativeDay, todayIso } from "@/lib/utils";
+import { addDaysIso, currentDayIndex, firstName, formatDate, formatRelative, pct, plural, relativeDay, todayIso } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -18,7 +21,7 @@ const PRIORITY_RANK = { critical: 0, high: 1, normal: 2, low: 3 } as const;
 
 export default async function AdminOverviewPage() {
   const user = await requireRole("admin");
-  const [settings, tt, ref, bookings, requests, disruptions, exams, activity] = await Promise.all([
+  const [settings, tt, ref, bookings, requests, disruptions, exams, activity, coursework, pendingAccessRequests] = await Promise.all([
     getSettings(),
     getPublishedTimetable(),
     getRef(),
@@ -27,8 +30,11 @@ export default async function AdminOverviewPage() {
     listDisruptions("proposed"),
     getExams(),
     listAudit({ limit: 7 }),
+    getCourseworkOversight(),
+    getPendingAccessRequestCount(),
   ]);
   const today = todayIso();
+  const next30Days = addDaysIso(today, 30);
   const dayIdx = currentDayIndex();
   const refDay = dayIdx < 0 ? 0 : dayIdx;
 
@@ -39,13 +45,15 @@ export default async function AdminOverviewPage() {
     .filter((b) => b.status === "approved" && b.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
     .slice(0, 5);
+  const approvedEventsNext30 = bookings.filter((b) => b.status === "approved" && b.date >= today && b.date <= next30Days).length;
   const upcomingExams = exams.filter((e) => e.date >= today).slice(0, 5);
   const examIssues = exams.filter((e) => e.issues.length).length;
 
   const teachingRooms = ref.rooms.filter((r) => ["lecture", "lab", "seminar"].includes(r.type));
   const activeTeaching = teachingRooms.filter((r) => r.status === "active");
-  const used = tt ? teachingRooms.reduce((n, r) => n + (tt.roomLoad.get(r.id) ?? 0), 0) : 0;
-  const utilisation = pct(used, activeTeaching.length * 40);
+  const weeklyTeachingPeriods = DAYS.length * PERIODS.length;
+  const used = tt ? activeTeaching.reduce((n, r) => n + (tt.roomLoad.get(r.id) ?? 0), 0) : 0;
+  const utilisation = pct(used, activeTeaching.length * weeklyTeachingPeriods);
   const stats = tt?.version.stats;
   const completion = stats ? pct(stats.placedPeriods, stats.requiredPeriods) : 0;
   const errors = tt?.issues.filter((i) => i.severity === "error") ?? [];
@@ -55,12 +63,42 @@ export default async function AdminOverviewPage() {
   for (const b of blocksToday) blockedFaculty.set(b.facultyId, [...(blockedFaculty.get(b.facultyId) ?? []), b.period]);
   const available = ref.faculty.length - blockedFaculty.size;
   const approvals = pendingBookings.length + requests.length + disruptions.length;
+  const totalSyllabusUnits = coursework.reduce((sum, course) => sum + course.units, 0);
+  const completedSyllabusUnits = coursework.reduce((sum, course) => sum + course.completed, 0);
+  const facultyTotalPeriods = tt ? ref.faculty.length * PERIODS.length : 0;
+  const facultyAvailablePeriods = Math.max(0, facultyTotalPeriods - blocksToday.length);
+  const healthReport = buildCampusHealthReport({
+    academic: { completedUnits: completedSyllabusUnits, totalUnits: totalSyllabusUnits },
+    faculty: {
+      availablePeriods: facultyAvailablePeriods,
+      totalPeriods: facultyTotalPeriods,
+      restrictedFaculty: blockedFaculty.size,
+      totalFaculty: ref.faculty.length,
+      dayLabel: dayIdx < 0 ? "Next teaching day · Monday" : `Today · ${DAYS[refDay]}`,
+    },
+    rooms: {
+      usedPeriods: used,
+      totalPeriods: tt ? activeTeaching.length * weeklyTeachingPeriods : 0,
+      activeRooms: activeTeaching.length,
+      totalRooms: teachingRooms.length,
+    },
+    requests: {
+      bookings: pendingBookings.length,
+      changes: requests.length,
+      disruptions: disruptions.length,
+      access: pendingAccessRequests,
+    },
+    events: { approvedNext30Days: approvedEventsNext30, target: 4 },
+    scheduling: stats
+      ? { placedPeriods: stats.placedPeriods, requiredPeriods: stats.requiredPeriods, hardConflicts: errors.length }
+      : null,
+  });
 
   const roomBars = tt
     ? teachingRooms
         .map((r) => ({
           label: `${r.code} · ${r.name}`,
-          value: pct(tt.roomLoad.get(r.id) ?? 0, 40),
+          value: pct(tt.roomLoad.get(r.id) ?? 0, weeklyTeachingPeriods),
           hint: r.status !== "active" ? "· maintenance" : undefined,
           tone: (r.status !== "active" ? "warning" : "brand") as "warning" | "brand",
         }))
@@ -87,6 +125,8 @@ export default async function AdminOverviewPage() {
           </>
         }
       />
+
+      <CampusHealthDashboard report={healthReport} />
 
       <Card className="mb-6 overflow-hidden">
         <div className="border-b border-line bg-gradient-to-r from-brand-50/80 via-surface to-surface px-5 py-4 sm:px-6">

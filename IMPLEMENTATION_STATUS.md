@@ -39,6 +39,14 @@ See `docs/CONSTRAINT_VERIFICATION.md` and `exports/report*.json`.
 - Submit-time validation plus coordinator approval before any timetable change.
 - The LLM has no database tool and never decides validity.
 
+### Campus operational health
+
+- The Admin Overview calculates one live 0–100 operational score from Academic Progress, Faculty Availability, Room Utilisation, Pending Requests, Event Activity and Scheduling Efficiency.
+- Every indicator displays its raw value, database/workflow source, configured weight and exact formula.
+- The overall score is a normalized weighted mean of indicators with real source data; missing data is excluded instead of treated as zero.
+- Health bands are deterministic: Healthy (85+), Stable (70–84), Watch (50–69), Needs attention (below 50).
+- The dashboard is read-only, uses existing tables, and requires no database migration or external analytics service.
+
 ### Targeted smart notices
 
 - Admins publish Urgent, Timetable, Room, Exam, Event or General notices to all inbox users, one role, or one department.
@@ -58,7 +66,7 @@ See `docs/CONSTRAINT_VERIFICATION.md` and `exports/report*.json`.
 
 ### Role workspaces
 
-- Admin: dashboard, scheduling editor, approvals, bookings, exams, venues, disruptions, targeted notice publishing/metrics, official CIT pipeline, audit, account management and reset.
+- Admin: live campus-health dashboard, scheduling editor, approvals, bookings, exams, venues, disruptions, targeted notice publishing/metrics, official CIT pipeline, audit, account management and reset.
 - Coordinator: department schedule, faculty, approvals, resources, event requests, department notice publishing and a notice inbox.
 - Faculty: timetable, availability, natural-language assistant, requests, coursework and a notice inbox.
 - Club: venue discovery, English/Hinglish request intake, bookings, history and a notice inbox.
@@ -69,7 +77,7 @@ See `docs/CONSTRAINT_VERIFICATION.md` and `exports/report*.json`.
 
 ```text
 python -m pytest engine/tests -q   33 passed
-npm run test:unit                  58 passed
+npm run test:unit                  64 passed
 npm run typecheck                  0 errors
 npm run lint                       0 problems
 npm run build                      success
