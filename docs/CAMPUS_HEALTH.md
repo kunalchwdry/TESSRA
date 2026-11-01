@@ -35,17 +35,9 @@ Room utilisation uses the actual workspace calendar denominator: 5 teaching days
 
 ## Transparency in the UI
 
-Every indicator card shows:
+Each compact indicator tile shows its current 0–100 score, configured weight, raw operational value and a direct link to the relevant Admin workflow. To keep the overview minimal, exact formulas and database/workflow sources sit inside the collapsed **How scoring works** section.
 
-- its current 0–100 score;
-- configured weight;
-- raw operational value;
-- plain-language interpretation;
-- exact formula;
-- database/workflow source;
-- a direct link to the relevant Admin workflow.
-
-The dashboard also displays the calculation timestamp, available-weight percentage, and whether any indicator was excluded for missing data.
+The dashboard also displays the calculation timestamp, number of scored indicators, and whether any configured weight was excluded for missing data.
 
 ## Safety and data behaviour
 
