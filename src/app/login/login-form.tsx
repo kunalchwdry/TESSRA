@@ -55,9 +55,9 @@ const BLOCKED_COPY: Record<Blocked, { title: string; body: string }> = {
   },
 };
 
-function DirectLinkPanel({ variant, onRetry }: { variant: Blocked; onRetry: () => void }) {
+function DirectLinkPanel({ variant, onRetry, loginPath }: { variant: Blocked; onRetry: () => void; loginPath: string }) {
   const origin = useOrigin();
-  const url = origin ? `${origin}/login` : "/login";
+  const url = origin ? `${origin}${loginPath}` : loginPath;
   const inputRef = useRef<HTMLInputElement>(null);
   const [copied, setCopied] = useState<"idle" | "copied" | "manual">("idle");
   const [popupBlocked, setPopupBlocked] = useState(false);
@@ -224,7 +224,16 @@ function DemoAccounts({ accounts, action, onSignedIn }: { accounts: Account[]; a
  * into the workspace. Whenever cookies can't persist here, show the direct address instead of
  * failing silently — including when the panel also blocks new tabs.
  */
-export function LoginPanel({ accounts }: { accounts: Account[] }) {
+export function LoginPanel({
+  accounts,
+  variant = "workspace",
+  loginPath,
+}: {
+  accounts: Account[];
+  variant?: "workspace" | "admin";
+  loginPath?: string;
+}) {
+  const resolvedLoginPath = loginPath ?? (variant === "admin" ? "/admin/login" : "/login");
   const context = useBrowserContext();
   const [probe, setProbe] = useState<"pending" | "ok" | "blocked">("pending");
   const [probeRun, setProbeRun] = useState(0);
@@ -301,20 +310,40 @@ export function LoginPanel({ accounts }: { accounts: Account[] }) {
 
   return (
     <>
-      {blocked && <DirectLinkPanel variant={blocked} onRetry={retry} />}
+      {blocked && <DirectLinkPanel variant={blocked} onRetry={retry} loginPath={resolvedLoginPath} />}
       <LoginForm action={signIn} onSignedIn={enterWorkspace} />
       <DemoAccounts accounts={accounts} action={signIn} onSignedIn={enterWorkspace} />
-      <p className="mt-6 text-center text-xs text-ink-3">
-        Don&apos;t have an account?{" "}
-        <a href="/access-request" className="font-medium text-brand-700 hover:underline">
-          Request access
-        </a>{" "}
-        (coordinator, faculty, club). Admins create accounts in the Admin Panel.
-      </p>
+      {variant === "admin" ? (
+        <div className="mt-6 space-y-2 text-center text-xs text-ink-3">
+          <p>Administrator access is limited to approved institutional accounts.</p>
+          <p>
+            Signing in to another role?{" "}
+            <a href="/login" className="font-medium text-brand-700 hover:underline">
+              Return to workspace sign in
+            </a>
+          </p>
+        </div>
+      ) : (
+        <div className="mt-6 space-y-2 text-center text-xs text-ink-3">
+          <p>
+            Don&apos;t have an account?{" "}
+            <a href="/access-request" className="font-medium text-brand-700 hover:underline">
+              Request access
+            </a>{" "}
+            (coordinator, faculty, club).
+          </p>
+          <p>
+            Administrator?{" "}
+            <a href="/admin/login" className="font-medium text-brand-700 hover:underline">
+              Use the dedicated admin sign-in
+            </a>
+          </p>
+        </div>
+      )}
       {context === "embedded" && probe === "ok" && !blocked && (
         <p className="mt-6 text-center text-xs text-ink-3">
           Working in a preview panel? You can also{" "}
-          <a href="/login" target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 hover:underline">
+          <a href={resolvedLoginPath} target="_blank" rel="noopener noreferrer" className="font-medium text-brand-700 hover:underline">
             open TESSRA in a new tab ↗
           </a>
         </p>
