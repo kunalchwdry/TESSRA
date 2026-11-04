@@ -11,6 +11,7 @@ Built for the Crunch Week problem statement (Chilika Institute of Technology): t
 | Service | URL |
 |---------|-----|
 | **Production (Vercel)** | https://tessra-five.vercel.app |
+| **Dedicated Admin sign-in** | https://tessra-five.vercel.app/admin/login |
 | **CIT Official Dataset workspace** | https://tessra-five.vercel.app/admin/official |
 | **CIT problem statement** | [`official/problem-statement.txt`](./official/problem-statement.txt) |
 | **Official CIT dataset** | [`cit_public.json`](./official/starterpack/CrunchWeek_StarterPack/data/cit_public.json) |
@@ -45,7 +46,7 @@ All four demo accounts use password **`tessra123`** and are pre-approved.
 
 ## ⚡ Three-minute evaluator path
 
-1. Open the [live app](https://tessra-five.vercel.app), choose the **Administrator** demo card, and sign in (the shared password is prefilled by the card).
+1. Open the [dedicated Administrator sign-in](https://tessra-five.vercel.app/admin/login) and use the **Administrator** demo card (the shared password is prefilled). The standard `/login` page also links to this entry point.
 2. On **Admin Overview**, use the **Quick start** strip:
    - **Find a room** → enter capacity plus a date/time; results are checked live against classes, exams and approved bookings.
    - **Read the timetable** → open the published week and switch between group, faculty and room views.
